@@ -42,7 +42,7 @@ Testes de serviço passaram em Android simulado nas APIs 26 e 35. Tela bloqueada
 
 O app salva M4A ou WebM, sem conversão para MP3, em armazenamento privado. Desinstalar ou limpar dados apaga tudo. Limite de 512 MB por arquivo, fila de até 50 itens e até 3 tentativas por item. Com somente Wi-Fi ativado, downloads aguardam rede Wi-Fi. O modo economizar dados prefere o menor bitrate compatível.
 
-As melhorias 0.2 foram orientadas pela inspeção estática do APK fornecido. Veja as evidências e limites em [analysis/spotify/RELATORIO.md](analysis/spotify/RELATORIO.md).
+As primeiras melhorias (0.2) foram orientadas por uma inspeção estática local de um APK de terceiros, mantida fora do repositório público. Veja os relatórios de validação abaixo.
 
 Auditoria e referências: [comparativo 0.4](docs/COMPARATIVO-0.4.md), [validação 0.4](docs/VALIDACAO-0.4.md), [validação 0.5](docs/VALIDACAO-0.5.md) e [validação 0.6](docs/VALIDACAO-0.6.md).
 
