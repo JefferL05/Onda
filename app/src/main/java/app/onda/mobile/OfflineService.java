@@ -36,6 +36,7 @@ public final class OfflineService extends Service {
     private String activeDownloadTitle = "";
     private boolean wifiOnly;
     private boolean dataSaver;
+    private boolean downloadsPaused;
     private ConnectivityManager.NetworkCallback networkCallback;
     private OfflineStore store;
     private LibraryStore library;
@@ -363,7 +364,7 @@ public final class OfflineService extends Service {
     }
 
     private void pumpDownloads() {
-        if (destroyed || downloading) return;
+        if (destroyed || downloading || downloadsPaused) return;
         if (!hasInternet()) {
             if (downloadQueue.pendingCount() > 0) status = "Sem internet. Os downloads continuam quando a conexão voltar.";
             emit();
@@ -482,6 +483,21 @@ public final class OfflineService extends Service {
     void retryDownload(String id) {
         if (downloadQueue.retry(id)) { persistDownloadQueue(); status = "Download na fila novamente."; emit(); pumpDownloads(); }
     }
+
+    /** Pause/resume the whole download queue; pending jobs stay in place. */
+    void pauseDownloads() {
+        downloadsPaused = !downloadsPaused;
+        if (downloadsPaused) {
+            DownloadQueue.Job active = downloadQueue.active();
+            if (active != null) cancelDownload(active.id);
+            status = "Fila de downloads pausada.";
+        } else {
+            status = "Fila de downloads retomada.";
+            pumpDownloads();
+        }
+        emit();
+    }
+    boolean downloadsPaused() { return downloadsPaused; }
 
     void clearFinishedDownloads() {
         downloadQueue.pruneFinished();

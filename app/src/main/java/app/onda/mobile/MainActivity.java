@@ -61,6 +61,7 @@ public final class MainActivity extends Activity {
     private TextView miniTitle;
     private ImageView miniCover;
     private Button miniToggle;
+    private ProgressBar miniProgress;
     private OfflineService playback;
     private boolean playbackBound;
     private final Runnable playbackChanged = this::updateNavigation;
@@ -107,11 +108,29 @@ public final class MainActivity extends Activity {
             return insets;
         });
         LinearLayout heading = row();
-        heading.setPadding(dp(20), dp(10), dp(16), dp(8));
-        TextView brand = label("onda", 30, GREEN);
+        heading.setPadding(dp(16), dp(12), dp(16), dp(8));
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        TextView brand = label("onda", 26, GREEN);
         brand.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        heading.addView(brand, new LinearLayout.LayoutParams(0, dp(48), 1));
-        heading.addView(button("Sobre", this::showAbout));
+        heading.addView(brand);
+        TextView version = label("V0.9.0", 10, Ui.MUTED);
+        version.setPadding(dp(6), dp(2), dp(6), dp(2));
+        version.setBackground(Ui.surface(this, Ui.PANEL_HIGH, 999, false));
+        version.setLetterSpacing(0.06f);
+        version.setPadding(dp(6), dp(3), dp(6), dp(3));
+        LinearLayout.LayoutParams versionParams = new LinearLayout.LayoutParams(-2, -2);
+        versionParams.leftMargin = dp(8);
+        heading.addView(version, versionParams);
+        View spacer = new View(this);
+        heading.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1));
+        LinearLayout engine = statusPill("●", "Online · Wi-Fi", Ui.GREEN);
+        heading.addView(engine);
+        Button about = button("≋", this::showAbout);
+        about.setContentDescription("Sobre e configurações");
+        about.setMinWidth(dp(44));
+        about.setMinimumWidth(dp(44));
+        about.setPadding(0, 0, 0, 0);
+        heading.addView(about, new LinearLayout.LayoutParams(dp(44), dp(44)));
         root.addView(heading);
         stage = row();
         root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -119,12 +138,13 @@ public final class MainActivity extends Activity {
         stage.addView(content, new LinearLayout.LayoutParams(0, -1, 1));
         setupBrowser();
         setupMiniPlayer();
-        nav = row();
+        nav = column();
         nav.setPadding(dp(8), dp(4), dp(8), dp(4));
-        nav.setBackgroundColor(PANEL);
+        nav.setBackgroundColor(Ui.GLASS);
         addNav(nav, "Início", this::showHome);
         addNav(nav, "Buscar", this::showSearch);
-        addNav(nav, "Sua Biblioteca", this::showLibrary);
+        addNav(nav, "Biblioteca", this::showLibrary);
+        addNav(nav, "Tocando", this::openOffline);
         layoutNavigation();
         showHome();
         if (state != null && web.restoreState(state) != null) {
@@ -134,12 +154,29 @@ public final class MainActivity extends Activity {
     }
 
     private void addNav(LinearLayout nav, String title, Runnable click) {
-        Button b = button(title, click);
-        b.setTextSize(13);
-        b.setContentDescription(title);
-        b.setPadding(0, 0, 0, 0);
-        navButtons.add(b);
-        nav.addView(b, new LinearLayout.LayoutParams(0, dp(52), 1));
+        LinearLayout tab = column();
+        tab.setGravity(Gravity.CENTER);
+        tab.setPadding(dp(6), dp(8), dp(6), dp(6));
+        tab.setContentDescription(title);
+        tab.setBackground(Ui.card(16));
+        Button glyph = new Button(this);
+        glyph.setText(title.startsWith("Início") ? "⌂" : title.startsWith("Buscar") ? "⌕"
+                : title.startsWith("Biblioteca") ? "▤" : "≋");
+        glyph.setAllCaps(false);
+        glyph.setTextSize(18);
+        glyph.setTextColor(Ui.MUTED);
+        glyph.setPadding(0, 0, 0, 0);
+        glyph.setMinWidth(0); glyph.setMinimumWidth(0); glyph.setMinHeight(dp(24));
+        tab.addView(glyph, new LinearLayout.LayoutParams(-2, dp(24)));
+        TextView caption = label(title, 10, Ui.MUTED);
+        caption.setPadding(0, dp(4), 0, 0);
+        tab.addView(caption);
+        navButtons.add(glyph);
+        glyph.setTag(caption);
+        tab.setOnClickListener(v -> click.run());
+        tab.setFocusable(true);
+        Ui.interactive(tab, Ui.RAISED, 16);
+        nav.addView(tab, new LinearLayout.LayoutParams(0, dp(64), 1));
     }
 
     private void layoutNavigation() {
@@ -147,55 +184,100 @@ public final class MainActivity extends Activity {
         if (nav.getParent() != null) ((ViewGroup)nav.getParent()).removeView(nav);
         nav.setOrientation(wide ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
         nav.setGravity(wide ? Gravity.TOP : Gravity.CENTER_VERTICAL);
-        for (Button b : navButtons) b.setLayoutParams(wide ? new LinearLayout.LayoutParams(-1,dp(56))
-                : new LinearLayout.LayoutParams(0,dp(56),1));
-        if (wide) stage.addView(nav,0,new LinearLayout.LayoutParams(dp(192),-1));
-        else root.addView(nav,new LinearLayout.LayoutParams(-1,dp(64)));
+        for (int i = 0; i < navButtons.size(); i++) {
+            Button glyph = navButtons.get(i);
+            Object tag = glyph.getTag();
+            if (tag instanceof TextView) ((TextView) tag).setTextSize(10);
+            View parent = (View) glyph.getParent();
+            parent.setLayoutParams(wide ? new LinearLayout.LayoutParams(dp(150), dp(64))
+                    : new LinearLayout.LayoutParams(0, dp(64), 1));
+        }
+        if (wide) stage.addView(nav,0,new LinearLayout.LayoutParams(dp(170),-1));
+        else root.addView(nav,new LinearLayout.LayoutParams(-1,dp(72)));
     }
     @Override public void onConfigurationChanged(android.content.res.Configuration config) {
         super.onConfigurationChanged(config); layoutNavigation();
     }
 
     private void setupMiniPlayer() {
+        LinearLayout shell = column();
+        shell.setPadding(dp(10), 0, dp(10), dp(8));
+        root.addView(shell, new LinearLayout.LayoutParams(-1, -2));
         miniPlayer = row();
-        miniPlayer.setPadding(dp(12), dp(8), dp(8), dp(8));
-        GradientDrawable background = new GradientDrawable();
-        background.setColor(Color.rgb(28, 52, 44));
-        background.setCornerRadius(dp(18));
-        background.setStroke(2, Color.rgb(64, 96, 86));
-        miniPlayer.setBackground(background);
-        Ui.interactive(miniPlayer, Ui.GREEN_DARK, 18);
+        miniPlayer.setPadding(dp(12), dp(10), dp(10), dp(10));
+        GradientDrawable glass = new GradientDrawable();
+        glass.setColor(Ui.GLASS); glass.setCornerRadius(dp(16));
+        glass.setStroke(1, Ui.STROKE_SOFT);
+        miniPlayer.setBackground(glass);
+        Ui.interactive(miniPlayer, Ui.GLASS, 16);
         miniPlayer.setContentDescription("Expandir player");
         miniPlayer.setOnClickListener(v -> openOffline());
         miniCover = new ImageView(this);
         miniCover.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        miniCover.setImageDrawable(null);
+        miniCover.setImageResource(R.drawable.ic_onda);
+        GradientDrawable cover = new GradientDrawable();
+        cover.setColor(Ui.PANEL_HIGH); cover.setCornerRadius(dp(10));
+        miniCover.setBackground(cover);
+        miniCover.setClipToOutline(true);
         miniCover.setContentDescription("Capa da música atual");
-        miniCover.setOnClickListener(v -> openOffline());
-        miniPlayer.addView(miniCover, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        miniPlayer.addView(miniCover, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        LinearLayout words = column();
         miniTitle = label("", 13, Color.WHITE);
         miniTitle.setMaxLines(2);
         miniTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        miniTitle.setOnClickListener(v -> openOffline());
-        miniTitle.setFocusable(true);
         miniTitle.setPadding(dp(10), 0, dp(6), 0);
-        miniPlayer.addView(miniTitle, new LinearLayout.LayoutParams(0, -2, 1));
-        miniToggle = button("Ouvir", () -> startForegroundService(new Intent(this, OfflineService.class).setAction(OfflineService.TOGGLE)));
+        words.addView(miniTitle, new LinearLayout.LayoutParams(0, -2, 1));
+        miniPlayer.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+        miniToggle = new Button(this);
+        miniToggle.setText("▶");
+        miniToggle.setAllCaps(false);
+        miniToggle.setTextSize(20);
+        miniToggle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        miniToggle.setTextColor(Ui.BG);
+        miniToggle.setPadding(0, 0, 0, 0);
+        miniToggle.setMinWidth(0); miniToggle.setMinimumWidth(0);
+        miniToggle.setContentDescription("Ouvir");
+        Ui.interactive(miniToggle, Ui.GREEN, 999);
+        LinearLayout.LayoutParams toggleParams = new LinearLayout.LayoutParams(dp(46), dp(46));
+        miniToggle.setLayoutParams(toggleParams);
+        miniToggle.setOnClickListener(v -> startForegroundService(new Intent(this, OfflineService.class).setAction(OfflineService.TOGGLE)));
         miniPlayer.addView(miniToggle);
-        miniPlayer.addView(button("⏭", () -> startForegroundService(new Intent(this, OfflineService.class).setAction(OfflineService.NEXT))));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.leftMargin = dp(12); params.rightMargin = dp(12); params.bottomMargin = dp(8);
-        root.addView(miniPlayer, params);
+        Button next = new Button(this);
+        next.setText("⏭");
+        next.setAllCaps(false);
+        next.setTextSize(16);
+        next.setTextColor(Ui.MUTED);
+        next.setPadding(0, 0, 0, 0);
+        next.setMinWidth(0); next.setMinimumWidth(0);
+        next.setContentDescription("Próxima música");
+        Ui.interactive(next, Ui.PANEL_HIGH, 999);
+        next.setOnClickListener(v -> startForegroundService(new Intent(this, OfflineService.class).setAction(OfflineService.NEXT)));
+        miniPlayer.addView(next, new LinearLayout.LayoutParams(dp(36), dp(36)));
+        miniProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        miniProgress.setMax(100);
+        miniProgress.setProgress(0);
+        miniProgress.setIndeterminate(false);
+        miniProgress.setVisibility(View.VISIBLE);
+        shell.addView(miniProgress, new LinearLayout.LayoutParams(-1, dp(2)));
+        shell.addView(miniPlayer);
         miniPlayer.setVisibility(View.GONE);
     }
 
     private void updateNavigation() {
         int selected = page.equals("home") ? 0 : (page.equals("search") || page.equals("browser")) ? 1 : 2;
         for (int i = 0; i < navButtons.size(); i++) {
-            Button button = navButtons.get(i);
-            button.setTextColor(i == selected ? GREEN : MUTED);
-            button.setSelected(i == selected);
-            button.setTypeface(Typeface.DEFAULT, i == selected ? Typeface.BOLD : Typeface.NORMAL);
+            Button glyph = navButtons.get(i);
+            glyph.setTextColor(i == selected ? GREEN : MUTED);
+            glyph.setSelected(i == selected);
+            glyph.setTypeface(Typeface.DEFAULT, i == selected ? Typeface.BOLD : Typeface.NORMAL);
+            Object tag = glyph.getTag();
+            if (tag instanceof TextView) {
+                TextView caption = (TextView) tag;
+                caption.setTextColor(i == selected ? GREEN : MUTED);
+                caption.setTypeface(Typeface.DEFAULT, i == selected ? Typeface.BOLD : Typeface.NORMAL);
+            }
+            View parent = (View) glyph.getParent();
+            if (parent != null) Ui.interactive(parent, i == selected ? Ui.GREEN_DARK : Ui.RAISED, 16);
         }
         if (miniPlayer != null) {
             boolean hasTrack = playback != null && playback.hasTrack();
@@ -205,6 +287,8 @@ public final class MainActivity extends Activity {
                 miniTitle.setText(playback.title() + "\n" + (artist.isEmpty() ? "" : artist + " · ") + playback.playerStatus());
                 miniToggle.setText(playback.playing() || (playback.loading() && playback.playRequested()) ? "⏸" : "▶");
                 miniToggle.setContentDescription(playback.playing() ? "Pausar" : "Ouvir");
+                miniProgress.setProgress(playback.duration() > 0
+                        ? (int) (playback.position() * 100L / Math.max(1, playback.duration())) : 0);
                 CoverCache.with(this).load(miniCover, playback.cover());
             }
         }
@@ -408,48 +492,257 @@ public final class MainActivity extends Activity {
         }).show();
     }
 
+    private String greeting() {
+        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        if (hour < 6) return "Boa madrugada";
+        if (hour < 12) return "Bom dia";
+        if (hour < 18) return "Boa tarde";
+        return "Boa noite";
+    }
+
     private void showHome() {
         LinearLayout body = nativePage("home");
-        body.addView(Ui.eyebrow(this, "Seu som, seu espaço"));
-        body.addView(title("Entre na sua onda."));
-        body.addView(paragraph("O que você gosta. O que vem a seguir."));
-        card(body, "▶  Encontrar uma música", "Busca nativa com capas, fila e download", this::showSearch);
-        List<String> names=library.playlists();
-        if(!names.isEmpty()) {
-            body.addView(title("Suas playlists"));
-            names.sort((a,b)->Boolean.compare(library.playlist(b).favorite,library.playlist(a).favorite));
-            for(int i=0;i<Math.min(5,names.size());i++) playlistCard(body,names.get(i));
-        }
-        if (!library.tracks(LibraryStore.FAVORITES).isEmpty()) card(body,"Músicas curtidas",
-                library.tracks(LibraryStore.FAVORITES).size()+" músicas",()->showCollection("Músicas curtidas",LibraryStore.FAVORITES));
-        card(body, "Downloads e arquivos do celular", "Sua música mesmo sem internet", this::openOffline);
-        body.addView(title("Escolha o clima"));
-        LinearLayout moods = row();
-        for (String mood : new String[]{"Foco", "Treino", "Relaxar"}) {
-            final String term = "música " + mood;
-            Button b = button(mood, () -> {
-                searchText=term; showSearch();
+        body.addView(Ui.eyebrow(this, "Sessão local ativa"));
+        body.addView(Ui.headline(this, greeting() + " no Onda"));
+        LinearLayout pills = row(); pills.setPadding(0, dp(4), 0, dp(12));
+        pills.addView(statusPill("≋", "Online · Wi-Fi", Ui.GREEN));
+        LinearLayout pillTwo = statusPill("↓", "Auto-Offline", Ui.MUTED);
+        pillTwo.setPadding(dp(10), dp(7), dp(12), dp(7));
+        pills.addView(pillTwo);
+        LinearLayout pillThree = statusPill("♪", "320kbps", Ui.VIOLET_LIGHT);
+        pills.addView(pillThree);
+        body.addView(pills);
+
+        // Universal search entry
+        LinearLayout searchBar = row();
+        searchBar.setPadding(dp(16), dp(10), dp(16), dp(10));
+        searchBar.setBackground(Ui.card(16));
+        searchBar.setGravity(Gravity.CENTER_VERTICAL);
+        searchBar.addView(label("⌕", 20, Ui.MUTED));
+        TextView searchHint = label("Buscar músicas, artistas ou colar link…", 15, Ui.MUTED);
+        searchHint.setPadding(dp(12), 0, 0, 0);
+        searchBar.addView(searchHint, new LinearLayout.LayoutParams(0, -2, 1));
+        Button paste = button("⌗", this::pasteLink);
+        paste.setContentDescription("Colar link do YouTube");
+        paste.setMinWidth(dp(40)); paste.setMinimumWidth(dp(40));
+        paste.setPadding(0, 0, 0, 0);
+        searchBar.addView(paste, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        LinearLayout.LayoutParams searchParams = new LinearLayout.LayoutParams(-1, -2);
+        searchParams.bottomMargin = dp(8);
+        body.addView(searchBar, searchParams);
+        Ui.interactive(searchBar, Ui.RAISED, 16);
+        searchBar.setOnClickListener(v -> showSearch());
+        searchBar.setFocusable(true);
+
+        // Filter chips
+        LinearLayout chips = row(); chips.setPadding(0, 0, 0, dp(12));
+        String[] labels = {"Tudo", "Músicas", "Vídeos", "Apenas Baixadas"};
+        for (int i = 0; i < labels.length; i++) {
+            final String label = labels[i];
+            final int index = i;
+            Button chip = Ui.chip(this, label, i == 0);
+            chip.setOnClickListener(v -> {
+                if ("Apenas Baixadas".equals(label)) { libraryFilter = "Baixadas"; showLibrary(); }
+                else { searchText = ""; searchFilter = index == 1 ? YoutubeSearch.FILTER_SONGS
+                        : index == 2 ? YoutubeSearch.FILTER_VIDEOS : YoutubeSearch.FILTER_SONGS; showSearch(); }
             });
-            moods.addView(b, new LinearLayout.LayoutParams(0, dp(56), 1));
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(40), 1);
+            p.rightMargin = dp(8);
+            chips.addView(chip, p);
         }
-        body.addView(moods);
+        body.addView(chips);
+
+        // Download queue widget
+        body.addView(downloadWidget());
+
+        // Tocadas recentemente
         List<LibraryStore.Track> history = library.tracks(LibraryStore.HISTORY);
         if (!history.isEmpty()) {
-            body.addView(title("Continue ouvindo"));
-            for (int i = 0; i < Math.min(4, history.size()); i++) {
-                LibraryStore.Track track = history.get(i);
-                trackRow(body,track,track.uploader,()->playNative(track),()->trackMenu(track,null,null));
+            body.addView(sectionHeader("Tocadas Recentemente", "Ver tudo", () ->
+                    showCollection("Tocadas recentemente", LibraryStore.HISTORY)));
+            LinearLayout strip = row();
+            strip.setPadding(0, 0, 0, dp(4));
+            android.widget.HorizontalScrollView scroll = Ui.strip(this);
+            LinearLayout rail = row();
+            for (int i = 0; i < Math.min(8, history.size()); i++) {
+                final LibraryStore.Track track = history.get(i);
+                boolean saved = new OfflineStore(this).find(OfflineStore.id(track.url)) != null;
+                carouselCard(rail, track, track.uploader,
+                        saved ? Ui.OFFLINE : Ui.VIOLET_LIGHT, saved ? "Baixada" : "Online",
+                        () -> playNative(track));
+            }
+            scroll.addView(rail);
+            body.addView(scroll);
+        }
+
+        // Playlists & coleções
+        List<String> names = library.playlists();
+        if (!names.isEmpty()) {
+            body.addView(sectionHeader("Playlists & Coleções", "Criar", () -> createPlaylist(null)));
+            names.sort((a, b) -> Boolean.compare(library.playlist(b).favorite, library.playlist(a).favorite));
+            for (int i = 0; i < names.size(); i += 2) {
+                LinearLayout grid = row();
+                for (int j = i; j < Math.min(i + 2, names.size()); j++) {
+                    final String name = names.get(j);
+                    grid.addView(collectionTile(name), new LinearLayout.LayoutParams(0, -2, 1));
+                }
+                if (grid.getChildCount() == 1) grid.addView(new View(this), new LinearLayout.LayoutParams(0, -2, 1));
+                body.addView(grid);
             }
         }
-        if(!history.isEmpty()) body.addView(button("Ver histórico recente",()->showCollection("Tocadas recentemente",LibraryStore.HISTORY)));
+
+        // A seguir na fila
+        body.addView(queueSnapshot());
+    }
+
+    /** Section header with an optional trailing action. */
+    private LinearLayout sectionHeader(String title, String action, Runnable run) {
+        LinearLayout header = row();
+        header.setPadding(0, dp(16), 0, dp(8));
+        TextView text = label(title, 18, Color.WHITE);
+        text.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        header.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
+        if (action != null) {
+            Button link = button(action, run);
+            link.setTextColor(GREEN);
+            link.setTextSize(12);
+            link.setMinHeight(dp(36));
+            link.setPadding(dp(8), 0, dp(8), 0);
+            header.addView(link);
+        }
+        return header;
+    }
+
+    /** Compact collection tile for the home bento grid. */
+    private LinearLayout collectionTile(String name) {
+        LinearLayout tile = column();
+        tile.setPadding(dp(10), dp(10), dp(10), dp(10));
+        tile.setBackground(Ui.card(16));
+        LibraryStore.Playlist p = library.playlist(name);
+        List<LibraryStore.Track> tracks = library.tracks(LibraryStore.playlistKey(name));
+        String cover = p.cover.isEmpty() ? (tracks.isEmpty() ? "" : tracks.get(0).thumbnail) : p.cover;
+        ImageView image = Ui.cover(this, 0, 12);
+        LinearLayout.LayoutParams imageParams = new LinearLayout.LayoutParams(-1, dp(96));
+        image.setLayoutParams(imageParams);
+        CoverCache.with(this).load(image, cover);
+        tile.addView(image, imageParams);
+        TextView text = label(name, 14, Color.WHITE);
+        text.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        text.setMaxLines(1); text.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        text.setPadding(0, dp(10), 0, 0);
+        tile.addView(text);
+        tile.addView(label(tracks.size() + " faixas · " + Ui.totalDuration(tracks), 11, Ui.MUTED));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.rightMargin = dp(6); params.bottomMargin = dp(6);
+        Ui.interactive(tile, Ui.RAISED, 16);
+        tile.setOnClickListener(v -> showCollection(name, LibraryStore.playlistKey(name)));
+        tile.setFocusable(true);
+        return tile;
+    }
+
+    /** Download queue summary card (real state from the service). */
+    private LinearLayout downloadWidget() {
+        LinearLayout card = column();
+        card.setPadding(dp(16), dp(14), dp(16), dp(14));
+        card.setBackground(Ui.card(16));
+        LinearLayout header = row();
+        header.addView(label("↓", 16, Ui.DOWNLOADING));
+        TextView title = label("Fila de Downloads", 15, Color.WHITE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setPadding(dp(8), 0, 0, 0);
+        header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+        int pending = playback == null ? 0 : Math.max(0, playback.downloadJobs().size());
+        TextView count = label(pending == 0 ? "Nada na fila" : pending + " na fila", 11, Ui.MUTED);
+        header.addView(count);
+        card.addView(header);
+        if (playback != null && playback.downloading()) {
+            DownloadQueue.Job active = null;
+            for (DownloadQueue.Job job : playback.downloadJobs())
+                if (job.state == DownloadQueue.State.ACTIVE) { active = job; break; }
+            if (active != null) {
+                TextView name = label(active.title, 13, Color.WHITE);
+                name.setMaxLines(1); name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                card.addView(name);
+                int percent = Math.max(0, playback.progress());
+                TextView detail = label("Baixando · " + (percent >= 0 ? percent + "%" : "conectando…"), 11, Ui.MUTED);
+                card.addView(detail);
+            }
+        } else {
+            card.addView(label("Sem downloads ativos.", 12, Ui.MUTED));
+        }
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.bottomMargin = dp(8);
+        card.setLayoutParams(params);
+        Ui.interactive(card, Ui.RAISED, 16);
+        card.setOnClickListener(v -> openOffline());
+        card.setFocusable(true);
+        return card;
+    }
+
+    /** "A seguir na fila" snapshot. */
+    private LinearLayout queueSnapshot() {
+        LinearLayout card = column();
+        card.setPadding(dp(16), dp(14), dp(16), dp(14));
+        card.setBackground(Ui.card(16));
+        LinearLayout header = row();
+        header.addView(label("≋", 16, Ui.VIOLET_LIGHT));
+        TextView title = label("A Seguir na Fila", 15, Color.WHITE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setPadding(dp(8), 0, 0, 0);
+        header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+        header.addView(label("Fila automática persistente", 10, Ui.MUTED));
+        card.addView(header);
+        List<String> order = playback == null ? new ArrayList<>() : playback.queueOrder();
+        List<LibraryStore.Track> base = library.tracks(LibraryStore.QUEUE);
+        int shownCount = 0;
+        for (String url : order) {
+            if (shownCount >= 3) break;
+            LibraryStore.Track found = null;
+            for (LibraryStore.Track item : base) if (item.url.equals(url)) { found = item; break; }
+            if (found == null) continue;
+            boolean saved = new OfflineStore(this).find(OfflineStore.id(found.url)) != null;
+            LinearLayout item = row();
+            item.setPadding(0, dp(10), 0, 0);
+            ImageView image = Ui.cover(this, 40, 8);
+            CoverCache.with(this).load(image, found.thumbnail);
+            item.addView(image);
+            LinearLayout words = column(); words.setPadding(dp(10), 0, 0, 0);
+            TextView name = label(found.title, 13, Color.WHITE);
+            name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            name.setMaxLines(1); name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            words.addView(name);
+            words.addView(label(found.uploader, 11, Ui.MUTED));
+            item.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+            item.addView(Ui.badge(this, saved ? "Offline" : "Online", saved ? Ui.OFFLINE : Ui.VIOLET_LIGHT));
+            card.addView(item);
+            shownCount++;
+        }
+        if (shownCount == 0) card.addView(label("Fila vazia. Adicione músicas pela busca ou biblioteca.", 12, Ui.MUTED));
+        Button open = button("Ver fila completa", this::showQueue);
+        open.setPadding(dp(0), dp(12), dp(0), 0);
+        card.addView(open);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.bottomMargin = dp(8);
+        card.setLayoutParams(params);
+        return card;
+    }
+
+    private void pasteLink() {
+        try {
+            android.content.ClipboardManager clipboard =
+                    (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (clipboard == null || !clipboard.hasPrimaryClip()) { toast("Nada na área de transferência."); return; }
+            CharSequence text = clipboard.getPrimaryClip().getItemAt(0).coerceToText(this);
+            String url = text == null ? "" : text.toString().trim();
+            if (UrlPolicy.youtube(url)) { searchText = ""; showBrowser(); web.loadUrl(url); }
+            else toast("O texto copiado não é um link do YouTube.");
+        } catch (Exception e) { toast("Não foi possível ler a área de transferência."); }
     }
 
     private void showSearch() {
         LinearLayout body = nativePage("search");
         body.addView(Ui.eyebrow(this, "Buscar"));
-        body.addView(title("O que vamos ouvir?"));
-        body.addView(paragraph("Busca nativa no YouTube, com capas. Sem abrir o navegador."));
-        EditText query = input("Música, artista ou álbum");
+        EditText query = input("Buscar músicas, artistas ou colar link…");
         query.setText(searchText);
         query.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s,int start,int count,int after) { }
@@ -457,18 +750,36 @@ public final class MainActivity extends Activity {
             public void afterTextChanged(Editable s) { }
         });
         query.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
-        body.addView(query, new LinearLayout.LayoutParams(-1, dp(60)));
+        LinearLayout searchRow = row();
+        searchRow.addView(query, new LinearLayout.LayoutParams(0, dp(56), 1));
+        Button clear = button("✕", () -> { query.setText(""); searchText = ""; });
+        clear.setContentDescription("Limpar busca");
+        clear.setMinWidth(dp(40)); clear.setMinimumWidth(dp(40));
+        clear.setPadding(0, 0, 0, 0);
+        searchRow.addView(clear, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        body.addView(searchRow);
+
+        // Engine line
+        LinearLayout engine = row(); engine.setPadding(0, dp(4), 0, dp(12));
+        engine.addView(label("●", 10, Ui.GREEN));
+        engine.addView(label("NewPipe Extractor 0.26.5", 11, Ui.MUTED));
+        View engineSpacer = new View(this);
+        engine.addView(engineSpacer, new LinearLayout.LayoutParams(0, 1, 1));
+        engine.addView(label("Motor nativo", 11, Ui.GREEN));
+        body.addView(engine);
+
         LinearLayout filters = row();
         String[] kinds={YoutubeSearch.FILTER_SONGS,YoutubeSearch.FILTER_ARTISTS,YoutubeSearch.FILTER_ALBUMS,YoutubeSearch.FILTER_PLAYLISTS,YoutubeSearch.FILTER_VIDEOS};
         String[] labels={"Músicas","Artistas","Álbuns","Playlists","Vídeos"};
         for(int i=0;i<kinds.length;i++) {
             String kind=kinds[i]; Button chip=Ui.chip(this,labels[i],kind.equals(searchFilter));
             chip.setOnClickListener(v->{searchFilter=kind;showSearch();});
-            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(dp(112),dp(48)); params.rightMargin=dp(8); filters.addView(chip,params);
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(40),1); params.rightMargin=dp(8); filters.addView(chip,params);
         }
-        android.widget.HorizontalScrollView filterScroll=new android.widget.HorizontalScrollView(this);
-        filterScroll.setHorizontalScrollBarEnabled(false); filterScroll.addView(filters); body.addView(filterScroll);
+        body.addView(filters);
+
         TextView status = label("", 13, MUTED);
+        status.setPadding(0, dp(12), 0, dp(4));
         body.addView(status);
         ProgressBar loading = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         loading.setMax(100);
@@ -487,23 +798,24 @@ public final class MainActivity extends Activity {
             if (action == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) { submit.run(); return true; }
             return false;
         });
-        Button searchButton = Ui.primary(this, "Buscar  →");
-        searchButton.setOnClickListener(v -> submit.run());
-        body.addView(searchButton,body.indexOfChild(status));
+        body.addView(button("Buscar  →", submit));
         body.addView(button("Buscar também na minha biblioteca",()->showLibraryMatches(searchText)));
+
         if (!library.recentSearches().isEmpty()) {
-            body.addView(title("Buscas recentes"));
+            body.addView(sectionHeader("Buscas Recentes", "Limpar histórico", () -> { library.clearSearches(); showSearch(); }));
+            LinearLayout rail = row();
+            android.widget.HorizontalScrollView scroll = Ui.strip(this);
             for (String term : library.recentSearches()) {
-                Button recent = button("↗  " + term, () -> {
-                    query.setText(term);
-                    runNativeSearch(term, status, loading, results);
-                });
-                recent.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-                body.addView(recent);
+                Button recent = Ui.chip(this, term, false);
+                recent.setOnClickListener(v -> { query.setText(term); runNativeSearch(term, status, loading, results); });
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, dp(36));
+                p.rightMargin = dp(8);
+                rail.addView(recent, p);
             }
-            body.addView(button("Limpar buscas recentes", () -> { library.clearSearches(); showSearch(); }));
+            scroll.addView(rail);
+            body.addView(scroll);
         }
-        body.addView(title("Descobrir"));
+        body.addView(sectionHeader("Descobrir", null, null));
         for (String genre : new String[]{"MPB", "Rock", "Hip hop", "Jazz", "Eletrônica", "Lo-fi"}) {
             final String term = genre + " música";
             card(body, genre, "Buscar músicas e apresentações", () -> {
@@ -642,54 +954,70 @@ public final class MainActivity extends Activity {
 
     private void addSearchCard(LinearLayout parent, YoutubeSearch.Result result) {
         if(!"track".equals(result.kind)) {
-            LinearLayout card=Ui.cardContainer(this); LinearLayout top=row(); ImageView image=Ui.cover(this,72,12);
+            LinearLayout card=Ui.cardContainer(this); LinearLayout top=row(); ImageView image=Ui.cover(this,56,12);
             CoverCache.with(this).load(image,result.thumbnail); top.addView(image);
-            TextView name=label(result.title+"\n"+result.uploader,16,Color.WHITE); name.setPadding(dp(12),0,0,0);
-            top.addView(name,new LinearLayout.LayoutParams(0,-2,1)); card.addView(top);
-            card.addView(button("artist".equals(result.kind)?"Buscar músicas deste artista":"Abrir coleção",()->{
+            LinearLayout words=column(); words.setPadding(dp(12),0,0,0);
+            TextView name=label(result.title,15,Color.WHITE); name.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+            name.setMaxLines(1); name.setEllipsize(android.text.TextUtils.TruncateAt.END); words.addView(name);
+            TextView detail=label(result.uploader,12,Ui.MUTED); detail.setMaxLines(1); words.addView(detail);
+            top.addView(words,new LinearLayout.LayoutParams(0,-2,1)); card.addView(top);
+            Button open=button("artist".equals(result.kind)?"Buscar músicas deste artista":"Abrir coleção",()->{
                 if("artist".equals(result.kind)) {searchText=result.title;searchFilter=YoutubeSearch.FILTER_SONGS;showSearch();}
                 else showRemoteCollection(result);
-            }));
+            });
+            open.setPadding(dp(0),dp(12),dp(0),0);
+            card.addView(open);
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(12);parent.addView(card,p);return;
         }
         LinearLayout card = Ui.cardContainer(this);
         LinearLayout top = Ui.row(this);
-        ImageView cover = Ui.cover(this, 64, 10);
+        ImageView cover = Ui.cover(this, 52, 10);
         CoverCache.with(this).load(cover, result.thumbnail);
         cover.setContentDescription("Capa de " + result.title);
         top.addView(cover);
         LinearLayout texts = new LinearLayout(this);
         texts.setOrientation(LinearLayout.VERTICAL);
         texts.setPadding(dp(12), 0, 0, 0);
-        TextView title = label(result.title, 16, Color.WHITE);
+        TextView title = label(result.title, 15, Color.WHITE);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        title.setMaxLines(2);
+        title.setMaxLines(1);
         title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         texts.addView(title);
         String subtitle = (result.uploader.isEmpty() ? "YouTube" : result.uploader)
                 + (result.durationSec > 0 ? " · " + Ui.formatDuration(result.durationSec) : "");
-        TextView detail = label(subtitle, 13, MUTED);
+        TextView detail = label(subtitle, 12, Ui.MUTED);
         detail.setMaxLines(1);
         detail.setEllipsize(android.text.TextUtils.TruncateAt.END);
         texts.addView(detail);
         top.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
+        final LibraryStore.Track track = new LibraryStore.Track(result.title, result.url,
+                result.uploader, result.thumbnail, result.durationSec);
+        Button play = new Button(this);
+        play.setText("▶");
+        play.setAllCaps(false);
+        play.setTextSize(18);
+        play.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        play.setTextColor(Ui.BG);
+        play.setPadding(0, 0, 0, 0);
+        play.setMinWidth(0); play.setMinimumWidth(0);
+        Ui.interactive(play, Ui.GREEN, 999);
+        play.setOnClickListener(v -> playNative(track));
+        play.setContentDescription("Ouvir " + result.title);
+        top.addView(play, new LinearLayout.LayoutParams(dp(44), dp(44)));
         card.addView(top);
         LinearLayout actions = Ui.row(this);
-        Button play = Ui.primary(this, "Ouvir");
-        play.setOnClickListener(v -> playNative(new LibraryStore.Track(result.title, result.url,
-                result.uploader, result.thumbnail, result.durationSec)));
+        actions.setPadding(dp(4), dp(10), dp(4), 0);
         Button queue = button("+ Fila", () -> {
-            library.enqueueManual(new LibraryStore.Track(result.title, result.url,
-                    result.uploader, result.thumbnail, result.durationSec),false);
+            library.enqueueManual(track,false);
             toast("Música incluída na fila");
         });
-        Button download = button("Baixar", () -> downloadAudio(new LibraryStore.Track(result.title,
-                result.url, result.uploader, result.thumbnail, result.durationSec)));
-        actions.addView(play, new LinearLayout.LayoutParams(0, dp(52), 1));
-        actions.addView(queue, new LinearLayout.LayoutParams(0, dp(52), 1));
-        actions.addView(download, new LinearLayout.LayoutParams(0, dp(52), 1));
+        Button download = button("Baixar", () -> downloadAudio(track));
+        Button more = button("⋮", () -> trackMenu(track,null,null));
+        more.setContentDescription("Mais opções");
+        actions.addView(queue, new LinearLayout.LayoutParams(0, dp(44), 1));
+        actions.addView(download, new LinearLayout.LayoutParams(0, dp(44), 1));
+        actions.addView(more, new LinearLayout.LayoutParams(dp(44), dp(44)));
         card.addView(actions);
-        card.addView(button("Curtir / playlist / tocar a seguir",()->trackMenu(new LibraryStore.Track(result.title,result.url,result.uploader,result.thumbnail,result.durationSec),null,null)));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.bottomMargin = dp(12);
         parent.addView(card, params);
@@ -697,21 +1025,82 @@ public final class MainActivity extends Activity {
 
     private void showLibrary() {
         LinearLayout body = nativePage("library");
-        body.addView(Ui.eyebrow(this,"Seu acervo")); body.addView(title("Sua Biblioteca"));
-        EditText query=input("Buscar nas músicas e playlists salvas");body.addView(query);
+        body.addView(Ui.eyebrow(this,"Sua Biblioteca"));
+        body.addView(Ui.headline(this,"Biblioteca"));
+        LinearLayout chips = row(); chips.setPadding(0, dp(4), 0, dp(12));
+        String[] kinds = {"Todas","Playlists","Favoritas","Artistas","Álbuns","Baixadas"};
+        for (int i = 0; i < kinds.length; i++) {
+            final String kind = kinds[i];
+            Button chip = Ui.chip(this, kind, kind.equals(libraryFilter));
+            chip.setOnClickListener(v -> { libraryFilter = kind; showLibrary(); });
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(40), 1);
+            p.rightMargin = dp(8);
+            chips.addView(chip, p);
+        }
+        body.addView(chips);
+
+        EditText query = input("Filtrar músicas e playlists salvas");
+        body.addView(query);
         body.addView(button("Buscar na biblioteca",()->showLibraryMatches(query.getText().toString())));
-        LinearLayout filters=row(); android.widget.HorizontalScrollView scroller=new android.widget.HorizontalScrollView(this);
-        for(String kind:new String[]{"Todas","Playlists","Favoritas","Artistas","Álbuns"}) {
-            Button chip=Ui.chip(this,kind,kind.equals(libraryFilter));chip.setOnClickListener(v->{libraryFilter=kind;showLibrary();});
-            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(108),dp(48));p.rightMargin=dp(8);filters.addView(chip,p);
+
+        // Device memory widget
+        OfflineStore store = new OfflineStore(this);
+        List<OfflineStore.Song> songs = store.songs();
+        long totalBytes = 0; int webm = 0;
+        for (OfflineStore.Song song : songs) {
+            totalBytes += song.bytes;
+            if ("webm".equals(song.extension)) webm++;
         }
-        scroller.addView(filters);scroller.setHorizontalScrollBarEnabled(false);body.addView(scroller);
-        if("Todas".equals(libraryFilter)) {
-            card(body,"Músicas curtidas",library.tracks(LibraryStore.FAVORITES).size()+" músicas",()->showCollection("Músicas curtidas",LibraryStore.FAVORITES));
-            card(body,"Tocadas recentemente","Seu histórico neste aparelho",()->showCollection("Tocadas recentemente",LibraryStore.HISTORY));
-            card(body,"Fila de reprodução","Suas escolhas primeiro",this::showQueue);
-            card(body,"Downloads e biblioteca do celular","Ouvir mesmo sem internet",this::openOffline);
-        }
+        LinearLayout memory = column();
+        memory.setPadding(dp(16), dp(14), dp(16), dp(14));
+        memory.setBackground(Ui.card(16));
+        LinearLayout memoryHeader = row();
+        memoryHeader.addView(label("⌸", 16, Ui.GREEN));
+        TextView memoryTitle = label("Memória do Dispositivo", 15, Color.WHITE);
+        memoryTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        memoryTitle.setPadding(dp(8), 0, 0, 0);
+        memoryHeader.addView(memoryTitle, new LinearLayout.LayoutParams(0, -2, 1));
+        memoryHeader.addView(label(songs.size() + " faixas", 11, Ui.MUTED));
+        memory.addView(memoryHeader);
+        memory.addView(label(Ui.formatSize(totalBytes) + " em " + songs.size() + " arquivos M4A/WebM", 12, Ui.MUTED));
+        memory.addView(label("Capas em cache privado.", 11, Ui.MUTED_DIM));
+        LinearLayout.LayoutParams memoryParams = new LinearLayout.LayoutParams(-1, -2);
+        memoryParams.bottomMargin = dp(8);
+        memory.setLayoutParams(memoryParams);
+        Ui.interactive(memory, Ui.RAISED, 16);
+        memory.setOnClickListener(v -> openOffline());
+        memory.setFocusable(true);
+        body.addView(memory);
+
+        // Download queue summary
+        LinearLayout downloads = column();
+        downloads.setPadding(dp(16), dp(14), dp(16), dp(14));
+        downloads.setBackground(Ui.card(16));
+        LinearLayout downloadsHeader = row();
+        downloadsHeader.addView(label("↓", 16, Ui.DOWNLOADING));
+        TextView downloadsTitle = label("Fila de Downloads", 15, Color.WHITE);
+        downloadsTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        downloadsTitle.setPadding(dp(8), 0, 0, 0);
+        downloadsHeader.addView(downloadsTitle, new LinearLayout.LayoutParams(0, -2, 1));
+        int pendingJobs = playback == null ? 0 : Math.max(0, playback.downloadJobs().size());
+        downloadsHeader.addView(label(pendingJobs == 0 ? "Parada" : pendingJobs + " na fila", 11, Ui.MUTED));
+        downloads.addView(downloadsHeader);
+        downloads.addView(label(pendingJobs == 0 ? "Sem downloads pendentes." : "Download em andamento no serviço.", 12, Ui.MUTED));
+        LinearLayout downloadsActions = row();
+        downloadsActions.setPadding(0, dp(12), 0, 0);
+        Button pauseAll = button("Pausar tudo", () -> { if (playback != null) playback.pauseDownloads(); toast("Fila de downloads pausada."); });
+        Button cleanCache = button("Limpar cache", () -> toast("Use Limpar cache nas Configurações."));
+        downloadsActions.addView(pauseAll, new LinearLayout.LayoutParams(0, dp(44), 1));
+        downloadsActions.addView(cleanCache, new LinearLayout.LayoutParams(0, dp(44), 1));
+        downloads.addView(downloadsActions);
+        LinearLayout.LayoutParams downloadsParams = new LinearLayout.LayoutParams(-1, -2);
+        downloadsParams.bottomMargin = dp(8);
+        downloads.setLayoutParams(downloadsParams);
+        Ui.interactive(downloads, Ui.RAISED, 16);
+        downloads.setOnClickListener(v -> openOffline());
+        downloads.setFocusable(true);
+        body.addView(downloads);
+
         if("Artistas".equals(libraryFilter)||"Álbuns".equals(libraryFilter)) {
             java.util.Map<String,List<LibraryStore.Track>> groups=new java.util.TreeMap<>();
             boolean albums="Álbuns".equals(libraryFilter);
@@ -727,6 +1116,25 @@ public final class MainActivity extends Activity {
             body.addView(button("Ver álbuns e músicas do aparelho",this::openOffline));
             return;
         }
+
+        if ("Baixadas".equals(libraryFilter)) {
+            body.addView(sectionHeader("Baixadas · disponíveis sem internet", null, null));
+            if (songs.isEmpty()) body.addView(paragraph("Nenhum arquivo salvo ainda. Baixe pela busca ou por uma coleção."));
+            for (OfflineStore.Song song : songs) {
+                LibraryStore.Track track = new LibraryStore.Track(song.title, song.url, "", "", song.duration / 1000);
+                trackRowCompact(body, track, "M4A/WebM · " + Ui.formatSize(song.bytes),
+                        Ui.OFFLINE, "Offline", () -> playNative(track), () -> trackMenu(track, null, null));
+            }
+            return;
+        }
+
+        if("Todas".equals(libraryFilter)) {
+            card(body,"Músicas curtidas",library.tracks(LibraryStore.FAVORITES).size()+" músicas",()->showCollection("Músicas curtidas",LibraryStore.FAVORITES));
+            card(body,"Tocadas recentemente","Seu histórico neste aparelho",()->showCollection("Tocadas recentemente",LibraryStore.HISTORY));
+            card(body,"Fila de reprodução","Suas escolhas primeiro",this::showQueue);
+            card(body,"Downloads e biblioteca do celular","Ouvir mesmo sem internet",this::openOffline);
+        }
+
         body.addView(button("+ Criar playlist",()->createPlaylist(null)));
         List<String> names=library.playlists();names.sort((a,b)->Boolean.compare(library.playlist(b).favorite,library.playlist(a).favorite));
         int count=0;
@@ -812,35 +1220,14 @@ public final class MainActivity extends Activity {
             int limit = Math.min(shown[0], items.size());
             for (int rowIndex = 0; rowIndex < limit; rowIndex++) {
                 LibraryStore.Track track = items.get(rowIndex);
-                LinearLayout entry = Ui.cardContainer(this);
-                LinearLayout top = Ui.row(this);
-                ImageView thumb = Ui.cover(this, 52, 8);
-                CoverCache.with(this).load(thumb, track.thumbnail);
-                thumb.setContentDescription("Capa de " + track.title);
-                top.addView(thumb);
-                LinearLayout texts = new LinearLayout(this);
-                texts.setOrientation(LinearLayout.VERTICAL);
-                texts.setPadding(dp(12), 0, 0, 0);
-                TextView text = label(track.title, 15, Color.WHITE);
-                text.setMaxLines(2);
-                text.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                text.setFocusable(true);
-                text.setOnClickListener(v -> playContext(items,name,key,track,false));
-                texts.addView(text);
                 boolean downloaded = new OfflineStore(this).find(OfflineStore.id(track.url)) != null;
                 String meta = (track.uploader.isEmpty() ? "" : track.uploader + " · ")
                         + (track.durationSec > 0 ? Ui.formatDuration(track.durationSec) + " · " : "")
-                        + (downloaded ? "↓ Baixada" : "Online");
-                TextView sub = label(meta, 12, MUTED);
-                sub.setMaxLines(1);
-                sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                texts.addView(sub);
-                top.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
-                Button more = button("⋮", () -> trackMenu(track,name,key));
-                more.setContentDescription("Opções de " + track.title);
-                top.addView(more);
-                entry.addView(top);
-                Ui.interactive(entry,PANEL,16);entry.setOnClickListener(v->playContext(items,name,key,track,false));
+                        + (downloaded ? "Offline" : "Online");
+                LinearLayout entry = trackRowCompact(list, track, meta, downloaded ? Ui.OFFLINE : Ui.VIOLET_LIGHT,
+                        downloaded ? "Offline" : "Online",
+                        () -> playContext(items,name,key,track,false),
+                        () -> trackMenu(track,name,key));
                 if(playlist) {
                     entry.setOnLongClickListener(v->{
                         if(!"manual".equals(sortMode[0])||filter.length()>0){toast("Use a ordem da playlist sem filtro para arrastar.");return true;}
@@ -856,9 +1243,6 @@ public final class MainActivity extends Activity {
                         return true;
                     });
                 }
-                LinearLayout.LayoutParams entryParams = new LinearLayout.LayoutParams(-1, -2);
-                entryParams.bottomMargin = dp(10);
-                list.addView(entry, entryParams);
             }
             if (limit < items.size()) {
                 Button more = button("Mostrar mais (" + (items.size() - limit) + ")", () -> { shown[0] += 60; renderBox[0].run(); });
@@ -972,11 +1356,10 @@ public final class MainActivity extends Activity {
 
     private void showQueue() {
         LinearLayout body = nativePage("queue");
-        body.addView(button("‹  Biblioteca", this::showLibrary));
-        body.addView(title("Sua próxima onda"));
-        body.addView(paragraph("Suas adições manuais têm prioridade. As sugestões automáticas aparecem identificadas."));
+        body.addView(Ui.eyebrow(this,"Fila"));
+        body.addView(Ui.headline(this,"Sua próxima onda"));
         if(playback!=null) {
-            body.addView(label(playback.originLabel(),13,GREEN));
+            body.addView(label(playback.originLabel(),12,GREEN));
             body.addView(button(playback.autoplay()?"Rádio automática: ligada":"Rádio automática: desligada",()->{playback.autoplay(!playback.autoplay());showQueue();}));
         }
         List<LibraryStore.Track> baseItems = library.tracks(LibraryStore.QUEUE);
@@ -987,33 +1370,26 @@ public final class MainActivity extends Activity {
             }
             if(playback.shuffled())body.addView(paragraph("Ordem aleatória ativa. Reorganizar manualmente desativa o aleatório."));
         } else items.addAll(baseItems);
-        if (items.isEmpty()) body.addView(paragraph("Abra uma coleção e toque em Iniciar fila, ou adicione um vídeo pelo menu ⋮."));
+        if (items.isEmpty()) body.addView(paragraph("Abra uma coleção e toque em Reproduzir, ou adicione uma música pelo menu ⋮."));
         for (int index = 0; index < items.size(); index++) {
-            LibraryStore.Track track = items.get(index);
+            final LibraryStore.Track track = items.get(index);
             boolean current = playback != null && track.url.equals(playback.currentUrl());
-            LinearLayout entry = row();
             String origin=library.origin(track.url);
             String source="radio".equals(origin)?"Sugestão automática":"manual".equals(origin)?"Adicionada por você":library.contextName();
-            TextView name = label((current ? "●  " : (index + 1) + ".  ") + track.title+"\n"+source, 15, current ? GREEN : Color.WHITE);
-            name.setPadding(dp(8), dp(12), dp(8), dp(12));
-            name.setFocusable(true);
-            name.setOnClickListener(v -> startTrack(track,false,false));
-            entry.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
-            Button options = button("⋮", () -> new AlertDialog.Builder(this).setTitle(track.title)
-                    .setItems(new String[]{"Mover para cima", "Mover para baixo", "Remover da fila"}, (d, which) -> {
-                        if (which == 2) library.remove(LibraryStore.QUEUE, track.url);
-                        else {
-                            if (playback != null && playback.shuffled()) {
-                                library.replaceQueue(items);
-                                playback.toggleShuffle();
-                            }
-                            library.moveQueue(track.url, which == 0 ? -1 : 1);
-                        }
-                        showQueue();
-                    }).show());
-            options.setContentDescription("Organizar " + track.title);
-            entry.addView(options);
-            body.addView(entry);
+            trackRowCompact(body, track, source, current ? GREEN : Ui.VIOLET_LIGHT, current ? "Tocando" : null,
+                    () -> startTrack(track,false,false),
+                    () -> new AlertDialog.Builder(this).setTitle(track.title)
+                            .setItems(new String[]{"Mover para cima", "Mover para baixo", "Remover da fila"}, (d, which) -> {
+                                if (which == 2) library.remove(LibraryStore.QUEUE, track.url);
+                                else {
+                                    if (playback != null && playback.shuffled()) {
+                                        library.replaceQueue(items);
+                                        playback.toggleShuffle();
+                                    }
+                                    library.moveQueue(track.url, which == 0 ? -1 : 1);
+                                }
+                                showQueue();
+                            }).show());
         }
         if (!items.isEmpty()) body.addView(button("Limpar fila", () -> new AlertDialog.Builder(this)
                 .setTitle("Limpar a fila local?").setMessage("Suas playlists e favoritos serão mantidos.")
@@ -1049,7 +1425,7 @@ public final class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         LinearLayout body = column();
-        int horizontal=22+Math.max(0,(getResources().getConfiguration().screenWidthDp-(wide?192:0)-920)/2);
+        int horizontal = 16;
         body.setPadding(dp(horizontal), dp(16), dp(horizontal), dp(24));
         scroll.addView(body);
         content.addView(scroll);
@@ -1057,7 +1433,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showAbout() {
-        new AlertDialog.Builder(this).setTitle("Onda · versão 0.8.0")
+        new AlertDialog.Builder(this).setTitle("Onda · versão 0.9.0")
                 .setMessage("Navegador musical independente para Android. Não é afiliado ao Spotify, YouTube ou Brave.\n\n"
                         + "Favoritos, playlists e histórico são locais. Não há cadastro Onda nem sincronização. "
                         + "O YouTube recebe as visitas e buscas e pode salvar seus próprios cookies.\n\n"
@@ -1146,32 +1522,102 @@ public final class MainActivity extends Activity {
     private TextView label(String text, int size, int color) {
         TextView v = new TextView(this); v.setText(text); v.setTextSize(size); v.setTextColor(color); v.setGravity(Gravity.CENTER_VERTICAL); return v;
     }
+    /** headline-lg: 22sp bold. */
     private TextView title(String text) {
-        TextView v = label(text, 27, Color.WHITE); v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        v.setPadding(0, dp(20), 0, dp(12)); return v;
+        TextView v = label(text, 22, Color.WHITE); v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        v.setPadding(0, dp(20), 0, dp(10)); return v;
     }
     private TextView paragraph(String text) {
-        TextView v = label(text, 14, MUTED); v.setLineSpacing(dp(4), 1); v.setPadding(0, dp(4), 0, dp(20)); return v;
+        TextView v = label(text, 14, Ui.MUTED); v.setLineSpacing(dp(4), 1); v.setPadding(0, dp(4), 0, dp(20)); return v;
     }
+    /** Glass pill action (secondary). */
     private Button button(String text, Runnable action) {
         Button b = Ui.ghost(this,text);
         b.setTextSize(13); b.setMinWidth(0); b.setMinimumWidth(0); b.setMinHeight(dp(48));
-        b.setPadding(dp(10), 0, dp(10), 0);
+        b.setPadding(dp(14), 0, dp(14), 0);
         b.setOnClickListener(v -> action.run()); return b;
     }
+    /** Rounded search field with leading glyph. */
     private EditText input(String hint) {
         EditText e = new EditText(this); e.setSingleLine(true); e.setHint(hint); e.setTextColor(Color.WHITE);
-        e.setTextSize(16); e.setHintTextColor(MUTED); e.setPadding(dp(14), dp(8), dp(14), dp(8)); return e;
+        e.setTextSize(16); e.setHintTextColor(Ui.MUTED_DIM); e.setPadding(dp(40), dp(8), dp(16), dp(8));
+        e.setBackground(Ui.card(16)); e.setMinHeight(dp(52)); return e;
     }
+    /** Surface-raised card with heading + subtitle. */
     private void card(LinearLayout parent, String title, String subtitle, Runnable action) {
-        LinearLayout box = column(); box.setPadding(dp(18), dp(18), dp(18), dp(18));
-        GradientDrawable background = new GradientDrawable(); background.setColor(PANEL); background.setCornerRadius(dp(18));
-        box.setBackground(background);
-        Ui.interactive(box,PANEL,18);
-        TextView heading = label(title, 18, Color.WHITE); heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        LinearLayout box = column(); box.setPadding(dp(16), dp(16), dp(16), dp(16));
+        box.setBackground(Ui.card(16));
+        Ui.interactive(box,Ui.RAISED,16);
+        TextView heading = label(title, 16, Color.WHITE); heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         box.addView(heading);
-        TextView detail = label(subtitle, 13, MUTED); detail.setPadding(0, dp(7), 0, 0); box.addView(detail);
+        TextView detail = label(subtitle, 13, Ui.MUTED); detail.setPadding(0, dp(6), 0, 0); box.addView(detail);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2); params.bottomMargin = dp(12);
         parent.addView(box, params); box.setOnClickListener(v -> action.run()); box.setFocusable(true);
+    }
+    /** Status pill: small rounded label over a tinted surface. */
+    private LinearLayout statusPill(String glyph, String text, int color) {
+        LinearLayout pill = row(); pill.setPadding(dp(10), dp(7), dp(12), dp(7));
+        pill.setBackground(Ui.surface(this, Color.argb(34, Color.red(color), Color.green(color), Color.blue(color)), 999, false));
+        TextView g = label(glyph, 14, color); g.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        pill.addView(g); pill.addView(label(text, 12, color));
+        return pill;
+    }
+    /** Track row: 64dp, 52px cover, two-tier text, trailing action. */
+    private LinearLayout trackRowCompact(LinearLayout parent, LibraryStore.Track track, String meta,
+                                          int badgeColor, String badgeText, Runnable play, Runnable more) {
+        LinearLayout card = Ui.cardContainer(this);
+        LinearLayout top = Ui.row(this);
+        ImageView image = Ui.cover(this, 52, 10);
+        CoverCache.with(this).load(image, track.thumbnail);
+        image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        top.addView(image);
+        LinearLayout words = column(); words.setPadding(dp(12), 0, dp(6), 0);
+        LinearLayout titleLine = row();
+        TextView name = label(track.title, 15, Color.WHITE);
+        name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        name.setMaxLines(1); name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        titleLine.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
+        if (badgeText != null) titleLine.addView(Ui.badge(this, badgeText, badgeColor));
+        words.addView(titleLine);
+        TextView detail = label(meta == null ? "" : meta, 12, Ui.MUTED);
+        detail.setMaxLines(1); detail.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        words.addView(detail);
+        top.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+        Button options = button("⋮", more);
+        options.setContentDescription("Opções de " + track.title);
+        top.addView(options, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        card.addView(top);
+        Ui.interactive(card, Ui.RAISED, 16);
+        card.setOnClickListener(v -> play.run());
+        card.setContentDescription("Ouvir " + track.title + ". " + meta);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
+        p.bottomMargin = dp(10);
+        parent.addView(card, p);
+        return card;
+    }
+    /** Square carousel card used by "Tocadas Recentemente". */
+    private void carouselCard(LinearLayout parent, LibraryStore.Track track, String subtitle,
+                              int badgeColor, String badgeText, Runnable play) {
+        LinearLayout card = column();
+        card.setPadding(dp(10), dp(10), dp(10), dp(10));
+        card.setBackground(Ui.card(16));
+        ImageView image = Ui.cover(this, 160, 12);
+        CoverCache.with(this).load(image, track.thumbnail);
+        image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        card.addView(image);
+        TextView name = label(track.title, 14, Color.WHITE);
+        name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        name.setMaxLines(1); name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        name.setPadding(0, dp(10), 0, 0);
+        card.addView(name);
+        TextView detail = label(subtitle == null ? "" : subtitle, 12, Ui.MUTED);
+        detail.setMaxLines(1); detail.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        card.addView(detail);
+        card.addView(Ui.badge(this, badgeText, badgeColor));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(176), -2);
+        params.rightMargin = dp(12);
+        parent.addView(card, params);
+        Ui.interactive(card, Ui.RAISED, 16);
+        card.setOnClickListener(v -> play.run());
     }
 }

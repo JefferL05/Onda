@@ -1,12 +1,18 @@
 # Onda — Android
 
-Versão 0.8.1 de um aplicativo musical Android com identidade própria. Busca nativa no YouTube com capas, player unificado online/offline, fila de downloads, biblioteca local e letras locais. O player usa Media3/ExoPlayer com fallback para MediaPlayer.
+Versão 0.9.0 de um aplicativo musical Android com identidade própria. Busca nativa no YouTube com capas, player unificado online/offline, fila de downloads, biblioteca local e letras locais. O player usa Media3/ExoPlayer com fallback para MediaPlayer.
+
+## Redesenho 0.9.0 — Oceanic Luminescence
+
+Nova identidade visual: canvas grafite `#0B0E14`, ciano bioluminescente `#00E5FF`, ultravioleta `#7C4DFF`, cards `#121721`, mini-player de vidro e navegação inferior de 4 abas (Início, Buscar, Biblioteca, Tocando). A funcionalidade e os dados locais foram preservados.
+
+Instale `dist/Onda-0.9.0-debug.apk` por cima da versão anterior, sem desinstalar ou limpar dados. Relatório: [validação 0.9.0](docs/VALIDACAO-0.9.0.md).
 
 ## Correção de reprodução 0.7.1
 
 A migração tinha dois controladores de foco de áudio e disparava a preparação novamente após seek/rebuffer. O serviço também ignorava o Media3 ao manter a notificação ativa. Esses caminhos foram corrigidos, junto com o histórico nulo para arquivos do celular e a retomada após Parar. Os testes não desativam mais Media3 por detecção de Robolectric: há testes separados do adaptador, do fallback e do ExoPlayer real carregando um WAV gerado.
 
-Instale `dist/Onda-0.8.1-debug.apk` por cima da versão anterior, sem desinstalar ou limpar dados. A tela do player identifica o motor em uso. Relatório: [validação 0.7.1](docs/VALIDACAO-0.7.1.md).
+Instale `dist/Onda-0.9.0-debug.apk` por cima da versão anterior, sem desinstalar ou limpar dados. A tela do player identifica o motor em uso. Relatório: [validação 0.7.1](docs/VALIDACAO-0.7.1.md).
 
 ## Funcionalidades
 
@@ -62,9 +68,9 @@ Requer JDK 17, Android SDK 35 e Gradle 8.11.1. Abra esta pasta no Android Studio
 .\gradlew.bat assembleDebug lintDebug
 ```
 
-Neste computador, `powershell -ExecutionPolicy Bypass -File .\build.ps1` localiza as ferramentas em `%LOCALAPPDATA%\AndroidBuild`, executa verificações e testes, compila, roda lint e verifica a assinatura. A entrega fica em `dist\Onda-0.8.1-debug.apk`, acompanhada de seu arquivo `.sha256`. As versões anteriores são preservadas.
+Neste computador, `powershell -ExecutionPolicy Bypass -File .\build.ps1` localiza as ferramentas em `%LOCALAPPDATA%\AndroidBuild`, executa verificações e testes, compila, roda lint e verifica a assinatura. A entrega fica em `dist\Onda-0.9.0-debug.apk`, acompanhada de seu arquivo `.sha256`. As versões anteriores são preservadas.
 
-Para incluir testes reais com o YouTube, use `powershell -ExecutionPolicy Bypass -File .\build.ps1 -LiveTests`. A execução final 0.8.1 passou 65 testes JUnit e 32 verificações independentes. Inclui busca real, resolução de áudio, download completo de 10.271.496 bytes e ExoPlayer carregando um WAV no Android simulado. Isso não substitui a validação de saída de áudio, codecs e bateria num aparelho.
+Para incluir testes reais com o YouTube, use `powershell -ExecutionPolicy Bypass -File .\build.ps1 -LiveTests`. A execução final 0.9.0 passou 65 testes JUnit e 32 verificações independentes. Inclui busca real, resolução de áudio, download completo de 10.271.496 bytes e ExoPlayer carregando um WAV no Android simulado. Isso não substitui a validação de saída de áudio, codecs e bateria num aparelho.
 
 Dependência de extração fixada em `NewPipeExtractor:v0.26.5` (GPL-3.0-or-later). Avisos, licenças e referências de fontes estão em `app/src/main/assets/licenses` e em **Sobre → Licenças**.
 

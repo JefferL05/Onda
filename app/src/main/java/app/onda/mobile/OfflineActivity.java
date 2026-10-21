@@ -16,14 +16,15 @@ public final class OfflineActivity extends Activity {
     private OfflineService service;
     private boolean bound, seeking;
     private int shownRevision = -1;
-    private String queueSig = "", downloadSig = "";
+    private String queueSig = "", downloadSig = "", panelSig = "";
     private TextView downloadStatus, trackTitle, trackArtist, trackBadges, playbackStatus, timing;
     private ProgressBar progress;
     private ProgressBar miniProgress;
     private SeekBar seek;
     private Button toggle, cancel;
-    private Button shuffle, repeat, sleep, radio;
-    private Button lyricsButton;
+    private Button shuffle, repeat, sleep, radio, favorite;
+    private Button lyricsButton, tabDetails, tabLyrics, tabQueue;
+    private LinearLayout panel;
     private ImageView cover;
     private LinearLayout queuePreview;
     private LinearLayout downloadList;
@@ -60,29 +61,43 @@ public final class OfflineActivity extends Activity {
         fullPage.setFillViewport(true);
         fullPage.addView(root);
         setContentView(fullPage);
-        Button back = Ui.ghost(this, "‹  Voltar ao Onda");
-        back.setOnClickListener(v -> finish());
+        Button back = Ui.ghost(this, "‹");
+        back.setContentDescription("Voltar");
+        back.setPadding(dp(10), 0, dp(10), 0);
         root.addView(back);
         root.addView(Ui.eyebrow(this, "Tocando agora"));
 
-        LinearLayout hero = Ui.cardContainer(this);
+        LinearLayout hero = column();
+        hero.setPadding(dp(18), dp(16), dp(18), dp(18));
+        hero.setBackground(Ui.card(24));
         cover = new ImageView(this);
         cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        cover.setBackground(Ui.card());
+        cover.setBackground(Ui.card(24));
         cover.setClipToOutline(true);
         cover.setContentDescription("Capa da música atual");
-        int coverSize = Ui.dp(this, 220);
-        hero.addView(cover, new LinearLayout.LayoutParams(coverSize, coverSize, 0));
-        ((LinearLayout.LayoutParams) cover.getLayoutParams()).gravity = Gravity.CENTER_HORIZONTAL;
+        int coverSize = Ui.dp(this, 240);
+        LinearLayout.LayoutParams coverParams = new LinearLayout.LayoutParams(coverSize, coverSize, 0);
+        coverParams.gravity = Gravity.CENTER_HORIZONTAL;
+        hero.addView(cover, coverParams);
+
+        trackBadges = new TextView(this);
+        trackBadges.setTextSize(11);
+        trackBadges.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        trackBadges.setTextColor(Ui.GREEN);
+        trackBadges.setGravity(Gravity.CENTER_HORIZONTAL);
+        trackBadges.setPadding(0, dp(12), 0, dp(8));
+        hero.addView(trackBadges);
+
         trackTitle = new TextView(this);
         trackTitle.setText("Seu player");
-        trackTitle.setTextSize(22);
+        trackTitle.setTextSize(24);
         trackTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         trackTitle.setTextColor(Color.WHITE);
         trackTitle.setGravity(Gravity.CENTER_HORIZONTAL);
         trackTitle.setMaxLines(2);
         trackTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
         hero.addView(trackTitle);
+
         trackArtist = new TextView(this);
         trackArtist.setTextSize(14);
         trackArtist.setTextColor(Ui.MUTED);
@@ -90,64 +105,11 @@ public final class OfflineActivity extends Activity {
         trackArtist.setMaxLines(1);
         trackArtist.setEllipsize(android.text.TextUtils.TruncateAt.END);
         hero.addView(trackArtist);
-        trackBadges = new TextView(this);
-        trackBadges.setTextSize(12);
-        trackBadges.setTextColor(Ui.GREEN);
-        trackBadges.setGravity(Gravity.CENTER_HORIZONTAL);
-        hero.addView(trackBadges);
-        playbackStatus = new TextView(this);
-        playbackStatus.setTextSize(12);
-        playbackStatus.setTextColor(Ui.MUTED);
-        playbackStatus.setGravity(Gravity.CENTER_HORIZONTAL);
-        hero.addView(playbackStatus);
-        timing = new TextView(this);
-        timing.setText("0:00 / 0:00");
-        timing.setTextSize(12);
-        timing.setTextColor(Ui.MUTED);
-        timing.setGravity(Gravity.CENTER_HORIZONTAL);
-        seek = new SeekBar(this);
-        seek.setContentDescription("Posição da música");
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar bar, int value, boolean user) { }
-            @Override public void onStartTrackingTouch(SeekBar bar) { seeking = true; }
-            @Override public void onStopTrackingTouch(SeekBar bar) { if (service != null) service.seek(bar.getProgress()); seeking = false; }
-        });
-        hero.addView(seek);
-        hero.addView(timing);
-        LinearLayout controls = Ui.row(this);
-        Button previous = Ui.ghost(this, "⏮");
-        previous.setTextSize(22);
-        previous.setContentDescription("Música anterior");
-        previous.setOnClickListener(v -> command(OfflineService.PREVIOUS));
-        toggle = Ui.primary(this, "Ouvir");
-        toggle.setOnClickListener(v -> command(OfflineService.TOGGLE));
-        Button next = Ui.ghost(this, "⏭");
-        next.setTextSize(22);
-        next.setContentDescription("Próxima música");
-        next.setOnClickListener(v -> command(OfflineService.NEXT));
-        controls.addView(previous, new LinearLayout.LayoutParams(0, Ui.dp(this, 56), 1));
-        controls.addView(toggle, new LinearLayout.LayoutParams(0, Ui.dp(this, 56), 2));
-        controls.addView(next, new LinearLayout.LayoutParams(0, Ui.dp(this, 56), 1));
-        hero.addView(controls);
-        LinearLayout modes = Ui.row(this);
-        shuffle = Ui.chip(this, "Aleatório", false);
-        shuffle.setOnClickListener(v -> { if (service != null) service.toggleShuffle(); });
-        repeat = Ui.chip(this, "Repetir", false);
-        repeat.setOnClickListener(v -> { if (service != null) service.cycleRepeat(); });
-        modes.addView(shuffle, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1));
-        modes.addView(repeat, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1));
-        hero.addView(modes);
-        radio = Ui.ghost(this, "Rádio automática: desligada");
-        radio.setOnClickListener(v -> {
-            if (service == null) return;
-            boolean enabled = !service.autoplay();
-            service.autoplay(enabled);
-            Toast.makeText(this, enabled ? "Ao acabar a fila, tocaremos sugestões parecidas."
-                    : "Fila terminará como está.", Toast.LENGTH_SHORT).show();
-        });
-        hero.addView(radio);
-        LinearLayout extras = Ui.row(this);
-        Button favorite = Ui.ghost(this, "♥ Favoritar");
+
+        LinearLayout heroActions = row();
+        heroActions.setGravity(Gravity.CENTER_HORIZONTAL);
+        heroActions.setPadding(0, dp(12), 0, 0);
+        favorite = Ui.ghost(this, "♥ Favoritar");
         favorite.setOnClickListener(v -> {
             if (service != null && service.hasTrack()) {
                 LibraryStore.Track track = service.currentTrack();
@@ -159,21 +121,89 @@ public final class OfflineActivity extends Activity {
                 Toast.makeText(this, "Música salva nos favoritos", Toast.LENGTH_SHORT).show();
             }
         });
-        Button stop = Ui.ghost(this, "Parar");
-        stop.setOnClickListener(v -> { if (service != null) service.stopPlayer(); });
-        sleep = Ui.ghost(this, "Temporizador");
-        sleep.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("Pausar após")
-                .setItems(new String[]{"Desativado", "15 minutos", "30 minutos", "60 minutos"}, (d, which) -> {
-                    if (service != null) service.sleepAfter(new int[]{0, 15, 30, 60}[which]);
-                }).show());
-        extras.addView(favorite, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1));
-        extras.addView(sleep, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1));
-        extras.addView(stop, new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1));
-        hero.addView(extras);
-        lyricsButton = Ui.ghost(this, "Adicionar letras");
-        lyricsButton.setOnClickListener(v -> showLyrics());
-        hero.addView(lyricsButton);
+        heroActions.addView(favorite);
+        hero.addView(heroActions);
+
+        seek = new SeekBar(this);
+        seek.setContentDescription("Posição da música");
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int value, boolean user) { }
+            @Override public void onStartTrackingTouch(SeekBar bar) { seeking = true; }
+            @Override public void onStopTrackingTouch(SeekBar bar) { if (service != null) service.seek(bar.getProgress()); seeking = false; }
+        });
+        hero.addView(seek, new LinearLayout.LayoutParams(-1, dp(32)));
+        timing = new TextView(this);
+        timing.setText("0:00 / 0:00");
+        timing.setTextSize(11);
+        timing.setTextColor(Ui.MUTED);
+        timing.setGravity(Gravity.CENTER);
+        timing.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        hero.addView(timing);
+        playbackStatus = new TextView(this);
+        playbackStatus.setTextSize(11);
+        playbackStatus.setTextColor(Ui.MUTED);
+        playbackStatus.setGravity(Gravity.CENTER);
+        playbackStatus.setPadding(0, 0, 0, dp(8));
+        hero.addView(playbackStatus);
+
+        LinearLayout controls = Ui.row(this);
+        controls.setGravity(Gravity.CENTER_VERTICAL);
+        controls.setPadding(0, dp(8), 0, dp(4));
+        shuffle = Ui.ghost(this, "⇄");
+        shuffle.setTextSize(18);
+        shuffle.setContentDescription("Aleatório");
+        shuffle.setOnClickListener(v -> { if (service != null) service.toggleShuffle(); });
+        Button previous = Ui.ghost(this, "⏮");
+        previous.setTextSize(20);
+        previous.setContentDescription("Música anterior");
+        previous.setOnClickListener(v -> command(OfflineService.PREVIOUS));
+        toggle = Ui.circle(this, "▶");
+        toggle.setTextSize(26);
+        toggle.setContentDescription("Ouvir ou pausar");
+        toggle.setOnClickListener(v -> command(OfflineService.TOGGLE));
+        Button next = Ui.ghost(this, "⏭");
+        next.setTextSize(20);
+        next.setContentDescription("Próxima música");
+        next.setOnClickListener(v -> command(OfflineService.NEXT));
+        repeat = Ui.ghost(this, "↻");
+        repeat.setTextSize(18);
+        repeat.setContentDescription("Repetição");
+        repeat.setOnClickListener(v -> { if (service != null) service.cycleRepeat(); });
+        controls.addView(shuffle, new LinearLayout.LayoutParams(0, dp(52), 1));
+        controls.addView(previous, new LinearLayout.LayoutParams(0, dp(52), 1));
+        controls.addView(toggle, new LinearLayout.LayoutParams(dp(72), dp(72)));
+        controls.addView(next, new LinearLayout.LayoutParams(0, dp(52), 1));
+        controls.addView(repeat, new LinearLayout.LayoutParams(0, dp(52), 1));
+        hero.addView(controls);
+
+        radio = Ui.ghost(this, "Rádio automática: desligada");
+        radio.setOnClickListener(v -> {
+            if (service == null) return;
+            boolean enabled = !service.autoplay();
+            service.autoplay(enabled);
+            Toast.makeText(this, enabled ? "Ao acabar a fila, tocaremos sugestões parecidas."
+                    : "Fila terminará como está.", Toast.LENGTH_SHORT).show();
+        });
+        hero.addView(radio);
+
+        // Tabs: Detalhes / Letras / Fila
+        LinearLayout tabs = row();
+        tabs.setPadding(0, dp(8), 0, 0);
+        tabDetails = Ui.chip(this, "Detalhes", true);
+        tabLyrics = Ui.chip(this, "Letras", false);
+        tabQueue = Ui.chip(this, "Fila", false);
+        tabDetails.setOnClickListener(v -> showPanel(0));
+        tabLyrics.setOnClickListener(v -> showPanel(1));
+        tabQueue.setOnClickListener(v -> showPanel(2));
+        tabs.addView(tabDetails, new LinearLayout.LayoutParams(0, dp(40), 1));
+        tabs.addView(tabLyrics, new LinearLayout.LayoutParams(0, dp(40), 1));
+        tabs.addView(tabQueue, new LinearLayout.LayoutParams(0, dp(40), 1));
+        hero.addView(tabs);
+        panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        hero.addView(panel);
         root.addView(hero);
+        showPanel(0);
 
         root.addView(Ui.section(this, "A seguir"));
         queuePreview = new LinearLayout(this);
@@ -257,19 +287,34 @@ public final class OfflineActivity extends Activity {
         trackBadges.setText(badges.trim());
         playbackStatus.setText(service.playerStatus() + " · " + service.engineName());
         CoverCache.with(this).load(cover, service.cover());
-        toggle.setText(service.playing() || (service.loading() && service.playRequested()) ? "Pausar" : "Ouvir");
+        toggle.setText(service.playing() || (service.loading() && service.playRequested()) ? "⏸" : "▶");
         toggle.setEnabled(service.hasTrack());
         seek.setEnabled(service.duration() > 0);
         seek.setMax(Math.max(1, service.duration()));
         if (!seeking) seek.setProgress(service.position());
-        timing.setText(Display.clock(service.position()) + " / " + Display.clock(service.duration()));
-        shuffle.setText(service.shuffled() ? "✓ Aleatório" : "Aleatório");
-        repeat.setText("Repetir: " + (service.repeat() == PlaybackQueue.Repeat.ONE ? "uma"
-                : service.repeat() == PlaybackQueue.Repeat.ALL ? "fila" : "não"));
-        sleep.setText(service.sleepRemaining() > 0 ? "Pausar em " + Display.clock(service.sleepRemaining()) : "Temporizador");
+        timing.setText(Display.clock(service.position()) + "  ·  " + service.duration() + " ms");
+        shuffle.setText(service.shuffled() ? "⇄" : "⇄");
+        shuffle.setTextColor(service.shuffled() ? Ui.GREEN : Ui.MUTED);
+        shuffle.setSelected(service.shuffled());
+        repeat.setText(service.repeat() == PlaybackQueue.Repeat.ONE ? "↻1"
+                : service.repeat() == PlaybackQueue.Repeat.ALL ? "↻" : "↻");
+        repeat.setTextColor(service.repeat() == PlaybackQueue.Repeat.OFF ? Ui.MUTED : Ui.GREEN);
+        repeat.setSelected(service.repeat() != PlaybackQueue.Repeat.OFF);
+        if (sleep != null) sleep.setText(service.sleepRemaining() > 0
+                ? "Pausar em " + Display.clock(service.sleepRemaining()) : "Temporizador");
         radio.setText(service.autoplay() ? "Rádio automática: ✓ ligada" : "Rádio automática: desligada");
-        lyricsButton.setEnabled(service.currentUrl() != null);
-        lyricsButton.setText(new LyricsStore(this).has(service.currentUrl()) ? "Letras salvas" : "Adicionar letras");
+        if (lyricsButton != null) {
+            lyricsButton.setEnabled(service.currentUrl() != null);
+            lyricsButton.setText(new LyricsStore(this).has(service.currentUrl()) ? "Letras salvas" : "Adicionar letras");
+        }
+        if (tabDetails != null) {
+            int active = tabDetails.isSelected() ? 0 : tabLyrics.isSelected() ? 1 : 2;
+            String panelState = (service.currentUrl() == null ? "" : service.currentUrl()) + "|" + service.originLabel()
+                    + "|" + service.engineName() + "|" + service.queueOrder().toString()
+                    + "|" + (new LyricsStore(this).has(service.currentUrl()) ? "1" : "0")
+                    + "|" + (service.sleepRemaining() / 60000);
+            if (!panelState.equals(panelSig)) { panelSig = panelState; showPanel(active); }
+        }
         // Heavy list rebuilds run only when their content actually changed; texts/progress update every tick.
         String queue = service.queueOrder().toString() + "|" + service.currentUrl() + "|" + service.title();
         if (!queue.equals(queueSig)) { queueSig = queue; renderQueuePreview(); }
@@ -278,6 +323,85 @@ public final class OfflineActivity extends Activity {
             downloads.append(job.id).append(job.state).append(service.progress() / 5).append(';');
         if (!downloads.toString().equals(downloadSig)) { downloadSig = downloads.toString(); renderDownloadQueue(); }
         if (shownRevision != service.revision()) { shownRevision = service.revision(); renderLibrary(); }
+    }
+
+    /** In-hero tab panel: 0 = Detalhes, 1 = Letras, 2 = Fila. */
+    private void showPanel(int index) {
+        tabDetails.setSelected(index == 0);
+        tabLyrics.setSelected(index == 1);
+        tabQueue.setSelected(index == 2);
+        tabDetails.setTextColor(index == 0 ? Ui.BG : Ui.MUTED);
+        tabLyrics.setTextColor(index == 1 ? Ui.BG : Ui.MUTED);
+        tabQueue.setTextColor(index == 2 ? Ui.BG : Ui.MUTED);
+        panel.removeAllViews();
+        if (index == 0) {
+            panel.addView(Ui.badge(this, service == null ? "Sem sessão" : service.engineName(), Ui.GREEN));
+            if (service != null) {
+                TextView info = new TextView(this);
+                info.setText(service.originLabel());
+                info.setTextSize(12);
+                info.setTextColor(Ui.MUTED);
+                panel.addView(info);
+            }
+            LinearLayout actions = Ui.row(this);
+            sleep = Ui.ghost(this, "Temporizador");
+            sleep.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("Pausar após")
+                    .setItems(new String[]{"Desativado", "15 minutos", "30 minutos", "60 minutos"}, (d, which) -> {
+                        if (service != null) service.sleepAfter(new int[]{0, 15, 30, 60}[which]);
+                    }).show());
+            Button stop = Ui.ghost(this, "Parar");
+            stop.setOnClickListener(v -> { if (service != null) service.stopPlayer(); });
+            actions.addView(sleep, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1));
+            actions.addView(stop, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1));
+            panel.addView(actions);
+        } else if (index == 1) {
+            lyricsButton = Ui.ghost(this, "Adicionar letras");
+            lyricsButton.setOnClickListener(v -> showLyrics());
+            panel.addView(lyricsButton);
+            if (service != null && service.currentUrl() != null) {
+                String text = new LyricsStore(this).get(service.currentUrl());
+                TextView lyrics = new TextView(this);
+                lyrics.setText(text.isEmpty() ? "Sem letras salvas para esta faixa." : text);
+                lyrics.setTextSize(14);
+                lyrics.setTextColor(text.isEmpty() ? Ui.MUTED : Color.WHITE);
+                lyrics.setLineSpacing(Ui.dp(this, 6), 1);
+                lyrics.setPadding(0, Ui.dp(this, 8), 0, 0);
+                panel.addView(lyrics);
+            } else panel.addView(Ui.body(this, "Abra uma música para salvar letras."));
+        } else {
+            if (service != null) {
+                List<String> order = service.queueOrder();
+                if (order.isEmpty()) panel.addView(Ui.body(this, "Fila vazia."));
+                List<LibraryStore.Track> base = new LibraryStore(this).tracks(LibraryStore.QUEUE);
+                int shownCount = 0;
+                for (String url : order) {
+                    if (shownCount >= 5) break;
+                    LibraryStore.Track found = null;
+                    for (LibraryStore.Track item : base) if (item.url.equals(url)) { found = item; break; }
+                    if (found == null) continue;
+                    LinearLayout item = Ui.row(this);
+                    item.setPadding(0, Ui.dp(this, 10), 0, 0);
+                    ImageView image = Ui.cover(this, 36, 8);
+                    CoverCache.with(this).load(image, found.thumbnail);
+                    item.addView(image);
+                    LinearLayout words = new LinearLayout(this);
+                    words.setOrientation(LinearLayout.VERTICAL);
+                    words.setPadding(Ui.dp(this, 10), 0, 0, 0);
+                    TextView name = new TextView(this);
+                    name.setText(found.title);
+                    name.setTextSize(13);
+                    name.setTextColor(Color.WHITE);
+                    name.setMaxLines(1);
+                    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    words.addView(name);
+                    words.addView(Ui.badge(this, url.equals(service.currentUrl()) ? "Tocando" : "Na fila",
+                            url.equals(service.currentUrl()) ? Ui.GREEN : Ui.VIOLET_LIGHT));
+                    item.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+                    panel.addView(item);
+                    shownCount++;
+                }
+            } else panel.addView(Ui.body(this, "Sem sessão de reprodução."));
+        }
     }
 
     private void scanLocal() {
@@ -554,6 +678,10 @@ public final class OfflineActivity extends Activity {
     }
 
     private void command(String action) { startForegroundService(new Intent(this, OfflineService.class).setAction(action)); }
+
+    private int dp(int value) { return Ui.dp(this, value); }
+    private LinearLayout column() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.VERTICAL); return v; }
+    private LinearLayout row() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.HORIZONTAL); v.setGravity(Gravity.CENTER_VERTICAL); return v; }
 
     private void showDownloadSettings() {
         if (service == null) return;
