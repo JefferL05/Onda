@@ -74,7 +74,11 @@ public final class MainActivity extends Activity {
         @Override public void onServiceDisconnected(android.content.ComponentName name) { playback = null; updateNavigation(); }
     };
     private LibraryStore.Track lastVideo;
-    private final List<Button> navButtons = new ArrayList<>();
+    private final List<ImageView> navIcons = new ArrayList<>();
+    private final java.util.ArrayDeque<String> navStack = new java.util.ArrayDeque<>();
+    private boolean isPoppingBack = false;
+    private long lastBackPressTime = 0;
+    private String collectionOrigin = "library";
     private final ExecutorService searchWorkers = Executors.newFixedThreadPool(2);
     private Future<?> pendingSearch;
     private int searchGeneration;
@@ -159,19 +163,19 @@ public final class MainActivity extends Activity {
         tab.setPadding(dp(6), dp(8), dp(6), dp(6));
         tab.setContentDescription(title);
         tab.setBackground(Ui.card(16));
-        Button glyph = new Button(this);
-        glyph.setText(title.startsWith("Início") ? "⌂" : title.startsWith("Buscar") ? "⌕"
-                : title.startsWith("Biblioteca") ? "▤" : "≋");
-        glyph.setAllCaps(false);
-        glyph.setTextSize(18);
-        glyph.setTextColor(Ui.MUTED);
-        glyph.setPadding(0, 0, 0, 0);
-        glyph.setMinWidth(0); glyph.setMinimumWidth(0); glyph.setMinHeight(dp(24));
-        tab.addView(glyph, new LinearLayout.LayoutParams(-2, dp(24)));
+        ImageView glyph = new ImageView(this);
+        glyph.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        int iconRes = title.startsWith("Início") ? R.drawable.ic_nav_home
+                : title.startsWith("Buscar") ? R.drawable.ic_nav_search
+                : title.startsWith("Biblioteca") ? R.drawable.ic_nav_library
+                : R.drawable.ic_nav_now_playing;
+        glyph.setImageResource(iconRes);
+        glyph.setColorFilter(Ui.MUTED);
+        tab.addView(glyph, new LinearLayout.LayoutParams(dp(22), dp(22)));
         TextView caption = label(title, 10, Ui.MUTED);
         caption.setPadding(0, dp(4), 0, 0);
         tab.addView(caption);
-        navButtons.add(glyph);
+        navIcons.add(glyph);
         glyph.setTag(caption);
         tab.setOnClickListener(v -> click.run());
         tab.setFocusable(true);
@@ -184,8 +188,8 @@ public final class MainActivity extends Activity {
         if (nav.getParent() != null) ((ViewGroup)nav.getParent()).removeView(nav);
         nav.setOrientation(wide ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
         nav.setGravity(wide ? Gravity.TOP : Gravity.CENTER_VERTICAL);
-        for (int i = 0; i < navButtons.size(); i++) {
-            Button glyph = navButtons.get(i);
+        for (int i = 0; i < navIcons.size(); i++) {
+            ImageView glyph = navIcons.get(i);
             Object tag = glyph.getTag();
             if (tag instanceof TextView) ((TextView) tag).setTextSize(10);
             View parent = (View) glyph.getParent();
@@ -264,20 +268,28 @@ public final class MainActivity extends Activity {
     }
 
     private void updateNavigation() {
-        int selected = page.equals("home") ? 0 : (page.equals("search") || page.equals("browser")) ? 1 : 2;
-        for (int i = 0; i < navButtons.size(); i++) {
-            Button glyph = navButtons.get(i);
-            glyph.setTextColor(i == selected ? GREEN : MUTED);
-            glyph.setSelected(i == selected);
-            glyph.setTypeface(Typeface.DEFAULT, i == selected ? Typeface.BOLD : Typeface.NORMAL);
+        int selected;
+        if (page.equals("home")) selected = 0;
+        else if (page.equals("search") || page.equals("browser") || page.equals("remote")) selected = 1;
+        else if (page.equals("library") || page.equals("collection") || page.equals("queue")) selected = 2;
+        else if (page.equals("player") || page.equals("offline")) selected = 3;
+        else selected = -1;
+
+        for (int i = 0; i < navIcons.size(); i++) {
+            ImageView glyph = navIcons.get(i);
+            boolean isSel = (i == selected);
+            boolean isNowPlaying = (i == 3 && playback != null && playback.hasTrack() && playback.playing());
+            int color = isSel ? GREEN : (isNowPlaying ? Ui.VIOLET_LIGHT : MUTED);
+            glyph.setColorFilter(color);
+            glyph.setSelected(isSel);
             Object tag = glyph.getTag();
             if (tag instanceof TextView) {
                 TextView caption = (TextView) tag;
-                caption.setTextColor(i == selected ? GREEN : MUTED);
-                caption.setTypeface(Typeface.DEFAULT, i == selected ? Typeface.BOLD : Typeface.NORMAL);
+                caption.setTextColor(color);
+                caption.setTypeface(Typeface.DEFAULT, (isSel || isNowPlaying) ? Typeface.BOLD : Typeface.NORMAL);
             }
             View parent = (View) glyph.getParent();
-            if (parent != null) Ui.interactive(parent, i == selected ? Ui.GREEN_DARK : Ui.RAISED, 16);
+            if (parent != null) Ui.interactive(parent, isSel ? Ui.GREEN_DARK : Ui.RAISED, 16);
         }
         if (miniPlayer != null) {
             boolean hasTrack = playback != null && playback.hasTrack();
@@ -838,6 +850,7 @@ public final class MainActivity extends Activity {
                     String key="remote:"+result.kind+":"+result.url;
                     library.cacheCollection(key,loaded.tracks); remoteCovers.put(key,loaded.cover);
                     if(loaded.truncated) partialCollections.add(key); else partialCollections.remove(key);
+                    collectionOrigin = "search";
                     showCollection(loaded.title,key);
                 });
             } catch(Exception e) {
@@ -1151,7 +1164,10 @@ public final class MainActivity extends Activity {
     private void showCollection(String name, String key) {
         collectionName=name; collectionKey=key;
         LinearLayout body = nativePage("collection");
-        body.addView(button("‹  Biblioteca", this::showLibrary));
+        boolean fromSearch = "search".equals(collectionOrigin) || (key != null && key.startsWith("remote:") && !key.contains(":library:"));
+        String backTitle = fromSearch ? "‹  Busca" : "‹  Biblioteca";
+        Runnable backAction = fromSearch ? this::showSearch : this::showLibrary;
+        body.addView(button(backTitle, backAction));
         boolean playlist=key.startsWith("playlist:");
         LibraryStore.Playlist info=library.playlist(name);
         List<LibraryStore.Track> allTracks=library.tracks(key);
@@ -1299,6 +1315,7 @@ public final class MainActivity extends Activity {
     private void openOffline() {
         web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(function(m){m.pause();});", null);
         startActivity(new Intent(this, OfflineActivity.class));
+        overridePendingTransition(R.anim.slide_in_bottom, R.anim.stay);
     }
 
     private void playNative(LibraryStore.Track track) {
@@ -1356,6 +1373,7 @@ public final class MainActivity extends Activity {
 
     private void showQueue() {
         LinearLayout body = nativePage("queue");
+        body.addView(button("‹  Voltar", this::onBackPressed));
         body.addView(Ui.eyebrow(this,"Fila"));
         body.addView(Ui.headline(this,"Sua próxima onda"));
         if(playback!=null) {
@@ -1419,6 +1437,10 @@ public final class MainActivity extends Activity {
         searchGeneration++;
         if(pendingSearch!=null)pendingSearch.cancel(true);
         if (page.equals("browser")) web.onPause();
+        if (!isPoppingBack && page != null && !page.equals(name)) {
+            if ("home".equals(name)) navStack.clear();
+            else navStack.push(page);
+        }
         page = name;
         updateNavigation();
         content.removeAllViews();
@@ -1429,6 +1451,8 @@ public final class MainActivity extends Activity {
         body.setPadding(dp(horizontal), dp(16), dp(horizontal), dp(24));
         scroll.addView(body);
         content.addView(scroll);
+        scroll.setAlpha(0f);
+        scroll.animate().alpha(1f).setDuration(180).start();
         return body;
     }
 
@@ -1483,9 +1507,38 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (customView != null) { leaveFullscreen(); return; }
         if (page.equals("browser") && web.canGoBack()) { web.goBack(); return; }
-        if (page.equals("collection") || page.equals("queue")) { showLibrary(); return; }
-        if (!page.equals("home")) { showHome(); return; }
-        super.onBackPressed();
+        while (!navStack.isEmpty()) {
+            String prev = navStack.pop();
+            if (prev != null && !prev.equals(page)) {
+                restorePage(prev);
+                return;
+            }
+        }
+        if (!page.equals("home")) {
+            showHome();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastBackPressTime < 2000) {
+            super.onBackPressed();
+        } else {
+            lastBackPressTime = now;
+            Toast.makeText(this, "Toque novamente para sair", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void restorePage(String target) {
+        isPoppingBack = true;
+        try {
+            if ("home".equals(target)) showHome();
+            else if ("search".equals(target)) showSearch();
+            else if ("library".equals(target)) showLibrary();
+            else if ("queue".equals(target)) showQueue();
+            else if ("browser".equals(target)) showBrowser();
+            else showHome();
+        } finally {
+            isPoppingBack = false;
+        }
     }
 
     @Override protected void onSaveInstanceState(Bundle out) {

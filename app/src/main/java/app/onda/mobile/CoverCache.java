@@ -15,6 +15,7 @@ import java.util.concurrent.*;
 
 /** Bounded image pipeline, including persisted document covers and MediaStore album art. */
 public final class CoverCache {
+    @android.annotation.SuppressLint("StaticFieldLeak")
     private static volatile CoverCache instance;
     private final Context context;
     private final LruCache<String,Bitmap> memory = new LruCache<String,Bitmap>(8*1024*1024) {

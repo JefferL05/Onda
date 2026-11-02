@@ -61,9 +61,10 @@ public final class OfflineActivity extends Activity {
         fullPage.setFillViewport(true);
         fullPage.addView(root);
         setContentView(fullPage);
-        Button back = Ui.ghost(this, "‹");
+        Button back = Ui.ghost(this, "‹  Voltar");
         back.setContentDescription("Voltar");
-        back.setPadding(dp(10), 0, dp(10), 0);
+        back.setPadding(dp(12), dp(6), dp(16), dp(6));
+        back.setOnClickListener(v -> finish());
         root.addView(back);
         root.addView(Ui.eyebrow(this, "Tocando agora"));
 
@@ -292,14 +293,23 @@ public final class OfflineActivity extends Activity {
         seek.setEnabled(service.duration() > 0);
         seek.setMax(Math.max(1, service.duration()));
         if (!seeking) seek.setProgress(service.position());
-        timing.setText(Display.clock(service.position()) + "  ·  " + service.duration() + " ms");
-        shuffle.setText(service.shuffled() ? "⇄" : "⇄");
+        timing.setText(Display.clock(service.position()) + " / " + Display.clock(service.duration()));
+        shuffle.setText(service.shuffled() ? "⇄ Ligado" : "⇄");
         shuffle.setTextColor(service.shuffled() ? Ui.GREEN : Ui.MUTED);
         shuffle.setSelected(service.shuffled());
-        repeat.setText(service.repeat() == PlaybackQueue.Repeat.ONE ? "↻1"
-                : service.repeat() == PlaybackQueue.Repeat.ALL ? "↻" : "↻");
-        repeat.setTextColor(service.repeat() == PlaybackQueue.Repeat.OFF ? Ui.MUTED : Ui.GREEN);
-        repeat.setSelected(service.repeat() != PlaybackQueue.Repeat.OFF);
+        if (service.repeat() == PlaybackQueue.Repeat.ONE) {
+            repeat.setText("↻ 1");
+            repeat.setTextColor(Ui.GREEN);
+            repeat.setSelected(true);
+        } else if (service.repeat() == PlaybackQueue.Repeat.ALL) {
+            repeat.setText("↻ Todas");
+            repeat.setTextColor(Ui.GREEN);
+            repeat.setSelected(true);
+        } else {
+            repeat.setText("↻");
+            repeat.setTextColor(Ui.MUTED);
+            repeat.setSelected(false);
+        }
         if (sleep != null) sleep.setText(service.sleepRemaining() > 0
                 ? "Pausar em " + Display.clock(service.sleepRemaining()) : "Temporizador");
         radio.setText(service.autoplay() ? "Rádio automática: ✓ ligada" : "Rádio automática: desligada");
@@ -406,7 +416,7 @@ public final class OfflineActivity extends Activity {
 
     private void scanLocal() {
         if (!LocalMediaStore.allowed(this)) {
-            if (Build.VERSION.SDK_INT >= 23) requestPermissions(new String[]{LocalMediaStore.permission()}, 42);
+            requestPermissions(new String[]{LocalMediaStore.permission()}, 42);
             localList.removeAllViews();
             TextView permission = new TextView(this);
             permission.setText("Permita acesso à música para listar os arquivos do celular.");
@@ -736,5 +746,10 @@ public final class OfflineActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Fila de reprodução").setItems(titles, (d, which) ->
                 startForegroundService(new Intent(this, OfflineService.class).setAction(OfflineService.PLAY_TRACK)
                         .putExtra("url", order.get(which)).putExtra("title", titles[which].replaceFirst("^●  ", "")))).show();
+    }
+
+    @Override public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.stay, R.anim.slide_out_bottom);
     }
 }
