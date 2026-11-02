@@ -1,4 +1,4 @@
-param([switch]$Install, [switch]$LiveTests)
+param([switch]$Install, [switch]$LiveTests, [switch]$Push, [string]$CommitMessage)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
@@ -67,6 +67,15 @@ try {
     if ($Install) {
         & "$env:ANDROID_HOME\platform-tools\adb.exe" install -r $destApk
         if ($LASTEXITCODE -ne 0) { throw 'Falha ao instalar no dispositivo. Verifique adb devices.' }
+    }
+
+    if ($Push) {
+        Set-Location $origRoot
+        $msg = if ($CommitMessage) { $CommitMessage } else { "Release $version - build e APK gerado" }
+        git add .
+        git commit -m $msg
+        git push origin main
+        Write-Output "Alterações enviadas para o GitHub com sucesso: $msg"
     }
 }
 finally {
