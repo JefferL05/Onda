@@ -9,7 +9,7 @@ final class LibraryDialogs {
     static final int EDIT = 52;
     static void save(Activity activity, LibraryStore.Track track, Runnable changed) {
         if (track == null) return;
-        LibraryStore library = new LibraryStore(activity);
+        LibraryStore library = LibraryStore.shared(activity);
         List<String> names = library.playlists();
         List<String> labels = new ArrayList<>(Arrays.asList("Curtir música", "Criar playlist"));
         labels.addAll(names);

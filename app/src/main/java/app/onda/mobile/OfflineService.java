@@ -47,6 +47,12 @@ public final class OfflineService extends Service {
     private SharedPreferences.OnSharedPreferenceChangeListener queueListener;
     private MediaPlayer player;
     private Media3AudioEngine media3;
+    final AudioFx effects = new AudioFx();
+    private int lastSessionId;
+    private long playedMs;
+    private int lastKnownPosition;
+    private boolean crossfade;
+    private int eqPreset;
     Media3AudioEngine.Factory media3Factory = Media3AudioEngine::new;
     RadioProvider radioProvider = RadioProvider.youtube();
     private boolean radioLoading;
@@ -80,7 +86,7 @@ public final class OfflineService extends Service {
     @Override public void onCreate() {
         super.onCreate();
         store = new OfflineStore(this);
-        library = new LibraryStore(this);
+        library = LibraryStore.shared(this);
         lyrics = new LyricsStore(this);
         preferences = getSharedPreferences("playback", MODE_PRIVATE);
         libraryPreferences = getSharedPreferences("library", MODE_PRIVATE);
@@ -102,7 +108,11 @@ public final class OfflineService extends Service {
         status = store.status();
         wifiOnly = preferences.getBoolean("wifiOnly", false);
         dataSaver = preferences.getBoolean("dataSaver", false);
+        crossfade = preferences.getBoolean("crossfade", false);
+        eqPreset = preferences.getInt("eqPreset", 0);
         restoreDownloadQueue();
+        // A queue persisted from a previous process resumes on its own.
+        main.postDelayed(this::pumpDownloads, 2000);
         if (preferences.getBoolean("autoOffline", false)) main.postDelayed(this::queueAutomaticOffline, 1500);
         getSystemService(NotificationManager.class).createNotificationChannel(
                 new NotificationChannel(CHANNEL, "Música e downloads", NotificationManager.IMPORTANCE_LOW));
@@ -198,11 +208,29 @@ public final class OfflineService extends Service {
         String origin = library.origin(current.url);
         return "radio".equals(origin) ? "Rádio · sugestão automática" : "manual".equals(origin) ? "Sua fila · adicionada por você" : library.contextName();
     }
+    /** Crossfade is a real volume envelope at track edges; off by default. */
+    boolean crossfade() { return crossfade; }
+    void crossfade(boolean enabled) {
+        crossfade = enabled;
+        preferences.edit().putBoolean("crossfade", enabled).apply();
+        if (!enabled && media3 != null) media3.setVolume(1f);
+        emit();
+    }
+    boolean equalizerAvailable() { return effects.available(); }
+    int equalizerPreset() { return effects.preset(); }
+    void equalizerPreset(int index) {
+        effects.applyPreset(index);
+        eqPreset = index;
+        preferences.edit().putInt("eqPreset", index).apply();
+        emit();
+    }
+    void equalizerBand(int band, int millibel) { effects.setBand(band, millibel); emit(); }
     void volume(int percent) { audio.setStreamVolume(AudioManager.STREAM_MUSIC,
             Math.round(Math.max(0,Math.min(100,percent)) * audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) / 100f), 0); }
     int volume() { int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC); return max == 0 ? 0 : audio.getStreamVolume(AudioManager.STREAM_MUSIC) * 100 / max; }
     boolean hasTrack() { return current != null || localUri != null; }
     boolean loading() { return loading; }
+    boolean buffering() { return buffering; }
     boolean playRequested() { return wantsPlay; }
     boolean shuffled() { return queue.shuffled(); }
     PlaybackQueue.Repeat repeat() { return queue.repeat(); }
@@ -514,6 +542,7 @@ public final class OfflineService extends Service {
     private void playLocal(String uri, String title, String artist, String album, String cover, long duration) {
         if (uri == null || uri.trim().isEmpty()) { status = "Arquivo local inválido."; finishIdle(); return; }
         int resumeAt = uri.equals(localUri) ? position() : 0;
+        recordListen();
         releasePlayer();
         media3Active = true;
         current = null;
@@ -577,11 +606,14 @@ public final class OfflineService extends Service {
         syncQueue();
         int resumeAt = canonical.equals(currentUrl()) ? position() : 0;
         current = track;
+        LibraryStore.Track enriched = library.find(canonical);
+        if (enriched != null) current = enriched;
         select(canonical, resumeAt);
     }
 
     private void select(String url, int at) {
         LibraryStore.Track selected = track(url);
+        recordListen();
         releasePlayer();
         media3Active = true;
         current = selected; queue.select(url); savedPosition = Math.max(0, at);
@@ -639,6 +671,30 @@ public final class OfflineService extends Service {
             if (!destroyed && generation == request && loading)
                 failPlayback("Tempo de carregamento esgotado. Toque em Ouvir para tentar novamente.");
         }, 90000);
+    }
+
+    private void attachEffects() {
+        if (media3 == null) return;
+        int sessionId = media3.audioSessionId();
+        if (sessionId == 0 || sessionId == lastSessionId && effects.available()) return;
+        lastSessionId = sessionId;
+        if (effects.attach(sessionId)) effects.applyPreset(eqPreset);
+    }
+
+    /**
+     * Records how much of the previous track was actually heard. A listen under
+     * 25% (or an explicit skip) becomes a negative signal for discovery.
+     */
+    private void recordListen() {
+        if (current == null) { playedMs = 0; return; }
+        LibraryStore.Track finished = current;
+        int duration = duration();
+        long heard = Math.max(playedMs, lastKnownPosition);
+        int ratio = duration <= 0 ? (heard > 0 ? 60 : 0) : (int) Math.min(100, heard * 100L / duration);
+        if (heard < 4000) { playedMs = 0; return; }
+        boolean skipped = ratio < 25 && heard > 4000;
+        library.recordPlay(finished, ratio, skipped);
+        playedMs = 0;
     }
 
     private void preparePlayer(String source, boolean remote, int request) {
@@ -704,6 +760,7 @@ public final class OfflineService extends Service {
                 @Override public void prepared(long duration) {
                     if (destroyed || request != generation || active != media3) return;
                     ready = true; loading = false; buffering = false; releasePreparation();
+                    attachEffects();
                     savedPosition = PlaybackPolicy.resumePosition(savedPosition, boundedMs(duration));
                     if (savedPosition > 0) active.seek(savedPosition);
                     if (wantsPlay) resume(); else pause();
@@ -724,6 +781,10 @@ public final class OfflineService extends Service {
                 @Override public void changed() {
                     if (destroyed || request != generation || active != media3) return;
                     updateSession(); refreshNotification(); emit();
+                }
+                @Override public void audioSession(int id) {
+                    if (destroyed || request != generation || active != media3) return;
+                    if (id != lastSessionId) { lastSessionId = id; attachEffects(); }
                 }
                 @Override public void failed(String message) {
                     if (destroyed || request != generation || active != media3) return;
@@ -895,8 +956,17 @@ public final class OfflineService extends Service {
         persist(); updateSession(); finishIdle();
     }
 
+    private void applyCrossfade() {
+        if (!crossfade || media3 == null) return;
+        int length = duration();
+        if (length < 20000) return;
+        float envelope = AudioFx.envelope(position(), length, 6000);
+        media3.setVolume(envelope);
+    }
+
     private void releasePlayer() {
         generation++; ready = false; loading = false; wantsPlay = false; buffering = false; radioLoading = false;
+        lastKnownPosition = 0; playedMs = 0; effects.release(); lastSessionId = 0;
         if (pendingResolve != null) { pendingResolve.cancel(true); pendingResolve = null; }
         releasePreparation(); releaseWifi();
         if (media3 != null) { media3.release(); media3 = null; }
@@ -954,11 +1024,14 @@ public final class OfflineService extends Service {
     private void refreshNotification() {
         boolean media = hasActivePlayback();
         if (destroyed || (!downloading && !media)) return;
-        Notification.Builder notification = new Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_onda)
+        Notification.Builder notification = new Notification.Builder(this, CHANNEL)
+                .setSmallIcon(R.drawable.ic_onda).setColor(Ui.CYAN)
                 .setContentTitle(media ? title() : "Onda · download")
                 .setContentText(media ? playerStatus() : status).setOnlyAlertOnce(true)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
-                .setContentIntent(PendingIntent.getActivity(this, 0, new Intent(this, OfflineActivity.class),
+                .setContentIntent(PendingIntent.getActivity(this, 0,
+                        new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                .putExtra("open_player", true),
                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
                 .setOngoing(downloading || playing() || (loading && wantsPlay));
         if (downloading && !media) {
@@ -1012,11 +1085,18 @@ public final class OfflineService extends Service {
             if (sleepDeadline != 0 && SystemClock.elapsedRealtime() >= sleepDeadline) {
                 sleepDeadline = 0; pause(); playerStatus = "Pausado pelo temporizador"; refreshNotification();
             }
-            if (ready) savedPosition = position();
+            if (ready) {
+                savedPosition = position();
+                if (playing()) playedMs += Math.max(0, savedPosition - lastKnownPosition);
+                lastKnownPosition = savedPosition;
+                applyCrossfade();
+            }
             // Persist only while state actually changes: playing/downloading. Paused position is saved on pause().
             if (current != null && (++ticks % 5 == 0) && (active || downloading)) persist();
             else ticks++;
-            if (hasTrack() || downloading) emit();
+            // Position is driven by the UI's own ticker. Emit on state changes or
+            // while a download's progress text needs refreshing.
+            if (downloading) emit();
             // Adaptive cadence: 1s while playing, 2s while busy, 5s idle. Paused-with-track stays alive but quiet.
             main.postDelayed(this, active ? 1000 : busy ? 2000 : 5000);
         }

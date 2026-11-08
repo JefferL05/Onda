@@ -24,6 +24,17 @@ public final class UrlPolicyTest {
         check(UrlPolicy.search("música & jazz").endsWith("m%C3%BAsica+%26+jazz"), "Unicode query encoding");
         check(UrlPolicy.canonicalVideo("https://youtu.be/") == null, "empty video ID");
         check(!UrlPolicy.youtube("not a url"), "malformed URL");
+        // 1.0 hardening cases
+        check(UrlPolicy.canonicalVideo("  https://youtu.be/dQw4w9WgXcQ  ") != null,
+                "surrounding whitespace is trimmed before parsing");
+        check(UrlPolicy.canonicalVideo("https://youtube.com/watch?v=dQw4w9WgXcQ&v=evil0000000") != null,
+                "duplicate v picks the first canonical id");
+        check(!UrlPolicy.youtube("https://youtube.com@attacker.example/"), "at-sign host spoof");
+        check(!UrlPolicy.youtube("https://youtube.com%2eattacker.example/"), "encoded dot host spoof");
+        check(!UrlPolicy.youtube("https://youtube.com./watch?v=dQw4w9WgXcQ"), "trailing-dot host");
+        check(UrlPolicy.blocked("https://sub.doubleclick.net/x"), "nested ad host");
+        check(!UrlPolicy.blocked("https://doubleclick.net.attacker.example/"), "ad lookalike");
+        check(!UrlPolicy.youtube("data:text/html,<script>"), "data URI rejected");
         System.out.println("PASS: " + assertions + " URL/filter checks");
     }
 }

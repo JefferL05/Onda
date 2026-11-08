@@ -64,6 +64,23 @@ final class OfflineStore {
 
     Song find(String id) { for (Song song : songs()) if (song.id.equals(id)) return song; return null; }
 
+    /**
+     * Cheap membership check for hot paths (player state, list badges): reads
+     * one preference entry and stats exactly one file, instead of every song.
+     */
+    boolean has(String id) {
+        if (id == null || id.isEmpty()) return false;
+        String raw = prefs.getString("song:" + id, null);
+        if (raw == null) return false;
+        try {
+            JSONObject item = new JSONObject(raw);
+            File file = file(item.getString("id"), item.getString("extension"));
+            return file.isFile() && file.length() == item.getLong("bytes");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     void save(Song song) throws Exception {
         JSONObject json = new JSONObject().put("id", song.id).put("title", song.title).put("url", song.url)
                 .put("extension", song.extension).put("uploader", song.uploader)

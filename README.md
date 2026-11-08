@@ -1,18 +1,123 @@
 # Onda — Android
 
-Versão 0.9.0 de um aplicativo musical Android com identidade própria. Busca nativa no YouTube com capas, player unificado online/offline, fila de downloads, biblioteca local e letras locais. O player usa Media3/ExoPlayer com fallback para MediaPlayer.
+Versão **1.0.0** ("Corrente"). Player musical Android com identidade própria:
+busca nativa no YouTube com capas, player unificado online/offline, fila,
+biblioteca local, letras sincronizadas fornecidas pelo usuário e descoberta
+calculada no aparelho a partir do que você realmente ouve.
 
-## Redesenho 0.9.0 — Oceanic Luminescence
+Instale `dist/Onda-1.0.0-debug.apk` por cima da versão anterior, sem desinstalar
+ou limpar dados. Relatórios: [auditoria 1.0](docs/AUDITORIA-1.0.md) ·
+[validação 1.0.0](docs/VALIDACAO-1.0.0.md).
 
-Nova identidade visual: canvas grafite `#0B0E14`, ciano bioluminescente `#00E5FF`, ultravioleta `#7C4DFF`, cards `#121721`, mini-player de vidro e navegação inferior de 4 abas (Início, Buscar, Biblioteca, Tocando). A funcionalidade e os dados locais foram preservados.
+## O que há de novo na 1.0
 
-Instale `dist/Onda-0.9.0-debug.apk` por cima da versão anterior, sem desinstalar ou limpar dados. Relatório: [validação 0.9.0](docs/VALIDACAO-0.9.0.md).
+- **Nova arquitetura de telas**: shell com 4 destinos persistentes, mini-player
+  único e telas próprias (Início, Explorar, Buscar, Biblioteca, Coleção,
+  Artista, Fila, Ajustes, Player). O estado da tela é preservado ao navegar.
+- **Design system "Corrente"**: paleta e escala tipográfica próprias, ícones
+  vetoriais desenhados em código, modo escuro coerente, alvos de toque grandes.
+- **Player profissional**: crossfade opcional, equalizador real com presets
+  (quando o aparelho suporta), letras sincronizadas por marcação `[m:ss]`,
+  notificação que abre o player e modo de recuperação quando uma fonte falha.
+- **Descoberta real**: Daily Mix, Descobertas da semana e "porque você ouviu X"
+  calculados no aparelho; nada de recomendações aleatórias apresentadas como IA.
+- **Busca melhor**: sugestões enquanto digita, histórico, filtros por tipo,
+  agrupamento e ranking local de relevância.
+- **Biblioteca completa**: favoritas, recentes, playlists com reordenação,
+  artistas, álbuns salvos, downloads e histórico — tudo sincronizado entre telas.
+- **Desempenho**: cache da biblioteca com invalidação, consultas O(1) nos
+  caminhos quentes, listas paginadas e eventos do serviço só quando mudam.
 
-## Correção de reprodução 0.7.1
+## Limites e privacidade
 
-A migração tinha dois controladores de foco de áudio e disparava a preparação novamente após seek/rebuffer. O serviço também ignorava o Media3 ao manter a notificação ativa. Esses caminhos foram corrigidos, junto com o histórico nulo para arquivos do celular e a retomada após Parar. Os testes não desativam mais Media3 por detecção de Robolectric: há testes separados do adaptador, do fallback e do ExoPlayer real carregando um WAV gerado.
+Busca, streaming e downloads dependem do YouTube/Google e podem mudar sem
+aviso. Favoritas, playlists, histórico, letras e arquivos ficam no armazenamento
+privado do app; não há conta nem sincronização entre aparelhos. O app não raspa
+sites de letras e não usa analytics próprio. Remover o app apaga tudo.
 
-Instale `dist/Onda-0.9.0-debug.apk` por cima da versão anterior, sem desinstalar ou limpar dados. A tela do player identifica o motor em uso. Relatório: [validação 0.7.1](docs/VALIDACAO-0.7.1.md).
+## Compilar
+
+Requer JDK 17, Android SDK 35 e Gradle 8.11.1:
+
+```powershell
+.\gradlew.bat assembleDebug lintDebug testDebugUnitTest
+```
+
+ou, neste computador, `powershell -ExecutionPolicy Bypass -File .\build.ps1`.
+
+## Funcionalidades
+
+- **Início** com Daily Mix, tocadas recentemente, recomendações "porque você
+  ouviu" e seus artistas — tudo calculado a partir do seu uso no aparelho.
+- **Explorar** com descobertas da semana, prateleiras por artista e por gênero
+  e um resumo do que você mais ouviu.
+- **Buscar** com sugestões enquanto digita, "você quis dizer", histórico,
+  filtros Músicas/Artistas/Álbuns/Playlists/Vídeos e ranking local de relevância.
+- **Biblioteca** com favoritas, recentes, playlists (reordenáveis, com capa e
+  descrição), artistas seguidos, álbuns salvos, downloads e histórico.
+- **Coleções** (playlist, álbum, mix, download) com reproduzir/embaralhar,
+  filtro, ordenação, baixar a lista e salvar como playlist.
+- **Player** em tela cheia com transporte completo, aleatório, repetição
+  (tudo/uma), temporizador de sono, fila, crossfade opcional, equalizador real
+  e letras sincronizadas.
+- **Mini-player** persistente com capa, título, artista, curtir, play/pause,
+  próxima e barra de progresso, presente em todas as abas.
+- **Serviço de mídia** com notificação, controles de tela bloqueada, foco de
+  áudio, pausa ao desconectar fones e restauração do estado ao reabrir.
+- **Downloads** com fila de até 50 itens, progresso, cancelar, tentar falhas,
+  baixar lista inteira e modo offline automático em Wi-Fi.
+- **Navegador YouTube** mantido para vídeo (tela cheia, voltar, salvar vídeo),
+  com o player nativo por cima para ouvir com a tela apagada.
+- **Ajustes** com rádio automática, Wi-Fi apenas, economia de dados, download
+  automático, apagamento de histórico/recomendações e licenças.
+
+## Ouvir com a tela bloqueada
+
+Na busca ou numa coleção, toque em Reproduzir. Depois de começar a tocar,
+bloqueie a tela pelo botão do celular e use a notificação ou os controles de
+mídia para pausar, voltar ou avançar. A apresentação na tela bloqueada depende
+das configurações de privacidade do aparelho.
+
+O player usa o arquivo baixado quando disponível; caso contrário, tenta o
+fluxo online. Se uma fonte online falhar, o player tenta uma qualidade
+alternativa antes de mostrar o erro.
+
+## Ouvir offline
+
+1. Na busca, toque em Baixar numa música; ou abra uma coleção e use **Baixar
+   esta lista**.
+2. Acompanhe em Ajustes ou no Player → Detalhes.
+3. Depois de concluído, toque em Reproduzir. A reprodução usa somente o arquivo local.
+
+O app salva M4A ou WebM, sem conversão para MP3, em armazenamento privado.
+Desinstalar ou limpar dados apaga tudo. Limite de 512 MB por arquivo, fila de
+até 50 itens e até 3 tentativas por item.
+
+## Limites desta versão
+
+Busca, streaming e downloads dependem do YouTube e podem mudar sem aviso,
+exigindo atualização do extrator. Capas vêm dos servidores de imagem do YouTube
+e são cacheadas no aparelho. Não há catálogo próprio, conta ou sincronização
+entre aparelhos. Forçar parada encerra o serviço; reabrir restaura a seleção
+pausada. O temporizador de sono não persiste após encerrar o processo.
+
+## Dados
+
+Favoritas, playlists, buscas, histórico, sessão de reprodução, fila de
+downloads e arquivos ficam no armazenamento privado. Capas ficam em cache
+privado. Remover o app apaga tudo. Buscas, streaming, capas e downloads são
+enviados ao YouTube/Google. Não há analytics do Onda. Os formatos antigos de
+biblioteca/downloads continuam sendo lidos; os campos novos são opcionais.
+
+## Compilar
+
+Requer JDK 17, Android SDK 35 e Gradle 8.11.1:
+
+```powershell
+.\gradlew.bat assembleDebug lintDebug testDebugUnitTest
+```
+
+ou, neste computador, `powershell -ExecutionPolicy Bypass -File .\build.ps1`.
 
 ## Funcionalidades
 

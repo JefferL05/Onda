@@ -15,7 +15,7 @@ public final class PlaylistEditActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         oldName = getIntent().getStringExtra("name");
-        LibraryStore store = new LibraryStore(this);
+        LibraryStore store = LibraryStore.shared(this);
         LibraryStore.Playlist playlist = oldName == null ? new LibraryStore.Playlist("", "", "", false) : store.playlist(oldName);
         coverUri = state == null ? playlist.cover : state.getString("cover", playlist.cover);
         LinearLayout body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);

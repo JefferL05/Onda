@@ -13,6 +13,7 @@ import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 
 /** Media3 backend kept behind a tiny adapter so the legacy backend can remain a fallback. */
+@androidx.annotation.OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)
 final class Media3AudioEngine {
     interface Factory { Media3AudioEngine create(Context context); }
     interface Listener {
@@ -21,6 +22,7 @@ final class Media3AudioEngine {
         void buffering(boolean active);
         void failed(String message);
         default void changed() { }
+        default void audioSession(int id) { }
     }
     private final Player player;
     private Listener listener;
@@ -61,14 +63,34 @@ final class Media3AudioEngine {
             @Override public void onPlayerError(androidx.media3.common.PlaybackException error) {
                 if (listener != null && !released) listener.failed(error.getErrorCodeName());
             }
+            @Override public void onAudioSessionIdChanged(int audioSessionId) {
+                if (listener != null && !released) listener.audioSession(audioSessionId);
+            }
         });
     }
     void listener(Listener value) { listener = value; }
+
+    /** Crossfade support: hand the player a source and later fade its volume. */
     void setSource(String source) {
         prepared = false;
         player.setMediaItem(MediaItem.fromUri(sourceUri(source)));
         player.prepare();
     }
+
+    void setVolume(float volume) {
+        try { player.setVolume(Math.max(0f, Math.min(1f, volume))); } catch (RuntimeException ignored) { }
+    }
+
+    /** Audio session for equalizer/crossfade effects; 0 when the platform has none. */
+    int audioSessionId() {
+        if (player instanceof ExoPlayer) {
+            try { return ((ExoPlayer) player).getAudioSessionId(); } catch (RuntimeException e) { return 0; }
+        }
+        return 0;
+    }
+
+    /** A stable id to tell one engine's session from the next. */
+    long sessionId() { return audioSessionId(); }
     static Uri sourceUri(String source) {
         if (source == null || source.trim().isEmpty()) throw new IllegalArgumentException("Fonte de áudio vazia");
         Uri uri;

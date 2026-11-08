@@ -11,7 +11,7 @@ public final class UrlPolicy {
 
     public static String host(String url) {
         try {
-            URI uri = URI.create(url);
+            URI uri = URI.create(url == null ? "" : url.trim());
             if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getUserInfo() != null
                     || (uri.getPort() != -1 && uri.getPort() != 443)) return "";
             return uri.getHost() == null ? "" : uri.getHost().toLowerCase(java.util.Locale.ROOT);
@@ -23,7 +23,7 @@ public final class UrlPolicy {
     }
 
     public static boolean youtube(String url) {
-        String host = host(url);
+        String host = host(url == null ? "" : url.trim());
         return within(host, "youtube.com") || host.equals("youtu.be");
     }
 
@@ -47,6 +47,7 @@ public final class UrlPolicy {
 
     /** Store video identities only, dropping tracking and ephemeral parameters. */
     public static String canonicalVideo(String url) {
+        if (url != null) url = url.trim();
         if (!youtube(url)) return null;
         try {
             URI uri = URI.create(url);
