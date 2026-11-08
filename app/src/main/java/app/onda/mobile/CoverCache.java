@@ -108,6 +108,22 @@ public final class CoverCache {
         while(options.outWidth/options.inSampleSize>640 || options.outHeight/options.inSampleSize>640) options.inSampleSize*=2;
         options.inJustDecodeBounds=false; return BitmapFactory.decodeByteArray(data,0,data.length,options);
     }
+    public long cacheSizeBytes() {
+        File[] files = directory.listFiles((dir, name) -> name.endsWith(".jpg"));
+        if (files == null) return 0;
+        long total = 0;
+        for (File file : files) total += file.length();
+        return total;
+    }
+
+    public void clearCache() {
+        memory.evictAll();
+        File[] files = directory.listFiles((dir, name) -> name.endsWith(".jpg"));
+        if (files != null) {
+            for (File file : files) file.delete();
+        }
+    }
+
     private void trim() {
         File[] files=directory.listFiles((dir,name)->name.endsWith(".jpg")); if(files==null) return;
         long total=0; for(File file:files) total+=file.length(); if(total<=64L*1024*1024) return;

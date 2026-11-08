@@ -295,6 +295,14 @@ public final class MainActivity extends Activity implements PlayerController.Lis
         pushScreen(new Screens.Settings(this));
     }
 
+    void openEqualizer() {
+        pushScreen(new Screens.Equalizer(this));
+    }
+
+    void openWelcomeSecurity() {
+        pushScreen(new Screens.WelcomeSecurity(this));
+    }
+
     void openQueue() {
         pushScreen(new Screens.Queue(this));
     }

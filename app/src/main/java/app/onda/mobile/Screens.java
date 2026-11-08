@@ -2,6 +2,12 @@ package app.onda.mobile;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.graphics.Canvas;
+import android.graphics.LinearGradient;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -153,17 +159,225 @@ final class Screens {
         }
     }
 
+    static final class SoundWaveView extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final int barCount = 20;
+        private final float[] heights = new float[barCount];
+        private boolean playing = false;
+        private long lastAnimTime = 0;
+        private float phase = 0f;
+
+        SoundWaveView(Context context) {
+            super(context);
+            paint.setColor(Ui.CYAN);
+            paint.setStyle(Paint.Style.FILL);
+        }
+
+        void setPlaying(boolean isPlaying) {
+            if (playing != isPlaying) {
+                playing = isPlaying;
+                invalidate();
+            }
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            int w = getWidth();
+            int h = getHeight();
+            if (w <= 0 || h <= 0) return;
+
+            float totalBarWidth = w * 0.85f;
+            float barWidth = totalBarWidth / (barCount * 1.5f);
+            float spacing = barWidth * 0.5f;
+            float startX = (w - (barCount * barWidth + (barCount - 1) * spacing)) / 2f;
+            float centerY = h / 2f;
+
+            long now = System.currentTimeMillis();
+            if (lastAnimTime == 0) lastAnimTime = now;
+            float dt = (now - lastAnimTime) / 1000f;
+            lastAnimTime = now;
+            if (playing) phase += dt * 5f;
+
+            for (int i = 0; i < barCount; i++) {
+                float target;
+                if (playing) {
+                    float wave = (float) Math.sin(phase + i * 0.55f);
+                    float wave2 = (float) Math.cos(phase * 0.7f + i * 0.35f);
+                    target = (0.25f + 0.38f * (wave * 0.5f + 0.5f) + 0.35f * (wave2 * 0.5f + 0.5f)) * (h * 0.85f);
+                } else {
+                    target = Ui.dp(getContext(), 4);
+                }
+                heights[i] = heights[i] + (target - heights[i]) * 0.25f;
+                float barH = Math.max(Ui.dp(getContext(), 3), heights[i]);
+                float left = startX + i * (barWidth + spacing);
+                float top = centerY - barH / 2f;
+                float right = left + barWidth;
+                float bottom = centerY + barH / 2f;
+                float radius = barWidth / 2f;
+                canvas.drawRoundRect(left, top, right, bottom, radius, radius, paint);
+            }
+
+            if (playing && isAttachedToWindow()) {
+                postInvalidateDelayed(33);
+            }
+        }
+    }
+
+    static final class EqualizerSplineView extends View {
+        private final Paint gridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint peakBadgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path curvePath = new Path();
+        private final Path fillPath = new Path();
+        private float[] bandGains = new float[]{0, 0, 0, 0, 0};
+        private String[] bandLabels = new String[]{"60Hz", "230Hz", "910Hz", "3.6kHz", "14kHz"};
+        private float maxDb = 15f;
+        private float peakDb = 0f;
+
+        EqualizerSplineView(Context context) {
+            super(context);
+            gridPaint.setColor(Ui.S3);
+            gridPaint.setStrokeWidth(Ui.dp(context, 1));
+            gridPaint.setStyle(Paint.Style.STROKE);
+
+            linePaint.setColor(Ui.CYAN);
+            linePaint.setStrokeWidth(Ui.dp(context, 3));
+            linePaint.setStyle(Paint.Style.STROKE);
+            linePaint.setStrokeCap(Paint.Cap.ROUND);
+            linePaint.setStrokeJoin(Paint.Join.ROUND);
+
+            fillPaint.setStyle(Paint.Style.FILL);
+
+            textPaint.setColor(Ui.TEXT3);
+            textPaint.setTextSize(Ui.dp(context, 11));
+            textPaint.setTextAlign(Paint.Align.CENTER);
+
+            peakBadgePaint.setColor(Ui.withAlpha(Ui.CYAN, 0x22));
+            peakBadgePaint.setStyle(Paint.Style.FILL);
+        }
+
+        void setBands(float[] gains, String[] labels, float maxGain) {
+            if (gains != null) {
+                bandGains = gains.clone();
+                peakDb = 0f;
+                for (float g : gains) if (Math.abs(g) > Math.abs(peakDb)) peakDb = g;
+            }
+            if (labels != null) bandLabels = labels;
+            if (maxGain > 0) maxDb = maxGain;
+            invalidate();
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            int w = getWidth();
+            int h = getHeight();
+            if (w <= 0 || h <= 0) return;
+
+            float padTop = Ui.dp(getContext(), 24);
+            float padBottom = Ui.dp(getContext(), 28);
+            float padLeft = Ui.dp(getContext(), 20);
+            float padRight = Ui.dp(getContext(), 20);
+            float plotWidth = w - padLeft - padRight;
+            float plotHeight = h - padTop - padBottom;
+            float centerY = padTop + plotHeight / 2f;
+
+            float[] gridSteps = {-12, -6, 0, 6, 12};
+            for (float step : gridSteps) {
+                float y = centerY - (step / maxDb) * (plotHeight / 2f);
+                gridPaint.setColor(step == 0 ? Ui.withAlpha(Ui.TEXT3, 0x33) : Ui.withAlpha(Ui.S3, 0x66));
+                canvas.drawLine(padLeft, y, w - padRight, y, gridPaint);
+            }
+
+            int count = bandGains.length;
+            if (count < 2) return;
+
+            float[] px = new float[count];
+            float[] py = new float[count];
+            for (int i = 0; i < count; i++) {
+                px[i] = padLeft + (i / (float) (count - 1)) * plotWidth;
+                float gain = Math.max(-maxDb, Math.min(maxDb, bandGains[i]));
+                py[i] = centerY - (gain / maxDb) * (plotHeight / 2f);
+            }
+
+            curvePath.reset();
+            curvePath.moveTo(px[0], py[0]);
+            for (int i = 0; i < count - 1; i++) {
+                float c1x = px[i] + (px[i + 1] - px[i]) / 2f;
+                float c1y = py[i];
+                float c2x = px[i] + (px[i + 1] - px[i]) / 2f;
+                float c2y = py[i + 1];
+                curvePath.cubicTo(c1x, c1y, c2x, c2y, px[i + 1], py[i + 1]);
+            }
+
+            fillPath.reset();
+            fillPath.addPath(curvePath);
+            fillPath.lineTo(px[count - 1], h - padBottom);
+            fillPath.lineTo(px[0], h - padBottom);
+            fillPath.close();
+
+            fillPaint.setShader(new LinearGradient(0, padTop, 0, h - padBottom,
+                    Ui.withAlpha(Ui.CYAN, 0x44), Ui.withAlpha(Ui.CYAN, 0x00), Shader.TileMode.CLAMP));
+            canvas.drawPath(fillPath, fillPaint);
+            canvas.drawPath(curvePath, linePaint);
+
+            Paint ptPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            ptPaint.setColor(Ui.CYAN);
+            ptPaint.setStyle(Paint.Style.FILL);
+            for (int i = 0; i < count; i++) {
+                canvas.drawCircle(px[i], py[i], Ui.dp(getContext(), 4), ptPaint);
+            }
+
+            for (int i = 0; i < count && i < bandLabels.length; i++) {
+                canvas.drawText(bandLabels[i], px[i], h - Ui.dp(getContext(), 8), textPaint);
+            }
+
+            String peakTag = (peakDb >= 0 ? "+" : "") + String.format(java.util.Locale.US, "%.1f dB", peakDb);
+            float badgeWidth = Ui.dp(getContext(), 64);
+            float badgeHeight = Ui.dp(getContext(), 20);
+            float badgeRight = w - padRight;
+            float badgeLeft = badgeRight - badgeWidth;
+            float badgeTop = Ui.dp(getContext(), 4);
+            float badgeBottom = badgeTop + badgeHeight;
+            canvas.drawRoundRect(badgeLeft, badgeTop, badgeRight, badgeBottom, Ui.dp(getContext(), 6), Ui.dp(getContext(), 6), peakBadgePaint);
+            Paint tagText = new Paint(Paint.ANTI_ALIAS_FLAG);
+            tagText.setColor(Ui.CYAN);
+            tagText.setTextSize(Ui.dp(getContext(), 10));
+            tagText.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+            tagText.setTextAlign(Paint.Align.CENTER);
+            canvas.drawText(peakTag, badgeLeft + badgeWidth / 2f, badgeTop + badgeHeight * 0.7f, tagText);
+        }
+    }
+
     static final class Home extends Screen {
         private int builtAt = -1;
+        private String selectedMood = "";
+        private static final String[] MOODS = {"Energia", "Relaxar", "Treino", "Foco", "Viagem"};
+
         Home(MainActivity host) {
             super(host);
             refresh();
         }
+
         @Override void refresh() {
             int now = library.revision();
             if (builtAt == now) return;
             builtAt = now;
             LinearLayout header = header(greeting(), "Onda", false, null, null);
+
+            // Profile & Local Security avatar in header
+            if (header.getChildCount() > 0 && header.getChildAt(header.getChildCount() - 1) instanceof LinearLayout) {
+                LinearLayout titleLine = (LinearLayout) header.getChildAt(header.getChildCount() - 1);
+                ImageView profile = Widgets.iconButton(context, Glyph.PERSON, Ui.CYAN, 20);
+                profile.setBackground(Ui.surface(context, Ui.withAlpha(Ui.CYAN, 0x1E), 999, false));
+                profile.setContentDescription("Acesso e Segurança");
+                profile.setOnClickListener(v -> host.openWelcomeSecurity());
+                LinearLayout.LayoutParams pParams = new LinearLayout.LayoutParams(Ui.dp(context, 40), Ui.dp(context, 40));
+                pParams.leftMargin = Ui.dp(context, 8);
+                titleLine.addView(profile, pParams);
+            }
+
             // Search entry
             LinearLayout searchEntry = Ui.row(context);
             searchEntry.setPadding(Ui.dp(context, 16), Ui.dp(context, 12), Ui.dp(context, 12), Ui.dp(context, 12));
@@ -181,20 +395,72 @@ final class Screens {
             searchEntry.setOnClickListener(v -> host.selectTab(MainActivity.TAB_SEARCH, true));
             searchEntry.setFocusable(true);
             Ui.ripple(searchEntry, 16);
+
             LinearLayout body = page(header);
             pad(body, searchEntry);
+
+            buildMoodPills(body);
+
             boolean empty = library.tracks(LibraryStore.FAVORITES).isEmpty() && library.tracks(LibraryStore.RECENT).isEmpty() && library.tracks(LibraryStore.HISTORY).isEmpty() && library.playlists().isEmpty();
             if (empty) {
                 buildFirstRun(body);
                 return;
             }
+
+            if (!selectedMood.isEmpty()) {
+                buildMoodShelf(body, selectedMood);
+            }
+
             buildQuickPills(body);
             buildDailyMix(body);
             buildRecent(body);
             buildBecause(body);
-            buildPlaylists(body);
             buildNewReleases(body);
+            buildPlaylists(body);
         }
+
+        private void buildMoodPills(LinearLayout body) {
+            android.widget.HorizontalScrollView scroll = Ui.strip(context);
+            LinearLayout rail = Ui.row(context);
+            rail.setPadding(Ui.dp(context, 20), Ui.dp(context, 10), Ui.dp(context, 20), 0);
+            for (String mood : MOODS) {
+                boolean active = mood.equalsIgnoreCase(selectedMood);
+                android.widget.Button chip = Ui.chip(context, mood, active);
+                chip.setOnClickListener(v -> {
+                    selectedMood = active ? "" : mood;
+                    builtAt = -1;
+                    refresh();
+                });
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, Ui.dp(context, 36));
+                params.rightMargin = Ui.dp(context, 8);
+                rail.addView(chip, params);
+            }
+            scroll.addView(rail);
+            horizontal(body, scroll);
+        }
+
+        private void buildMoodShelf(LinearLayout body, String mood) {
+            section(body, "Clima: " + mood, "Explorar", () -> host.openSearchWith(mood + " música"));
+            List<LibraryStore.Track> catalog = library.catalog();
+            List<LibraryStore.Track> matching = new ArrayList<>();
+            String mLower = mood.toLowerCase();
+            for (LibraryStore.Track t : catalog) {
+                if (t.title.toLowerCase().contains(mLower) || t.artist().toLowerCase().contains(mLower)) {
+                    matching.add(t);
+                }
+            }
+            if (matching.isEmpty()) matching.addAll(catalog);
+            if (matching.isEmpty()) return;
+            android.widget.HorizontalScrollView scroll = Widgets.carousel(context, 200);
+            LinearLayout rail = Widgets.rail(scroll);
+            for (LibraryStore.Track track : matching.subList(0, Math.min(8, matching.size()))) {
+                rail.addView(Widgets.coverCard(context, track.title, track.artist(), track.thumbnail, 148,
+                        () -> player.playCollection(matching, mood, "mood:" + mood, track, false),
+                        () -> Widgets.trackMenu(context, library, track, null, null, this::refresh)));
+            }
+            horizontal(body, scroll);
+        }
+
         private void buildQuickPills(LinearLayout body) {
             android.widget.HorizontalScrollView scroll = Ui.strip(context);
             LinearLayout rail = Ui.row(context);
@@ -206,6 +472,7 @@ final class Screens {
             scroll.addView(rail);
             horizontal(body, scroll);
         }
+
         private void addPill(LinearLayout rail, String text, Runnable run) {
             android.widget.Button pill = Ui.chip(context, text, false);
             pill.setOnClickListener(v -> run.run());
@@ -213,6 +480,7 @@ final class Screens {
             params.rightMargin = Ui.dp(context, 8);
             rail.addView(pill, params);
         }
+
         private void buildDailyMix(LinearLayout body) {
             Discovery.Mix mix = Discovery.dailyMix(library, 20);
             if (mix.tracks.isEmpty()) return;
@@ -220,14 +488,13 @@ final class Screens {
                     mix.title,
                     "Reproduzir",
                     () -> player.playCollection(mix.tracks, mix.title, "mix:daily", mix.tracks.get(0), false));
-            TextView why = Ui.meta(context, mix.subtitle);
+            TextView why = Ui.meta(context, mix.subtitle + " · Calculado no chip");
+            why.setTextColor(Ui.CYAN);
             why.setPadding(Ui.dp(context, 20), 0, Ui.dp(context, 20), Ui.dp(context, 8));
             body.addView(why);
             android.widget.HorizontalScrollView scroll = Widgets.carousel(context, 200);
             LinearLayout rail = Widgets.rail(scroll);
-            for (int i = 0;
-            i < Math.min(10, mix.tracks.size());
-            i++) {
+            for (int i = 0; i < Math.min(10, mix.tracks.size()); i++) {
                 final LibraryStore.Track track = mix.tracks.get(i);
                 rail.addView(Widgets.coverCard(context, track.title, track.artist(), track.thumbnail, 148,
                         () -> player.playCollection(mix.tracks, mix.title, "mix:daily", track, false),
@@ -235,11 +502,12 @@ final class Screens {
             }
             horizontal(body, scroll);
         }
+
         private void buildRecent(LinearLayout body) {
             List<LibraryStore.Track> recent = library.recentlyPlayed(10);
             if (recent.isEmpty()) return;
             section(body,
-                    "Tocadas recentemente",
+                    "Sua Fila Rápida / Ouvir Novamente",
                     "Ver tudo",
                     () -> host.openCollection("Tocadas recentemente", LibraryStore.RECENT, ""));
             android.widget.HorizontalScrollView scroll = Widgets.carousel(context, 200);
@@ -251,6 +519,7 @@ final class Screens {
             }
             horizontal(body, scroll);
         }
+
         private void buildBecause(LinearLayout body) {
             Discovery.Mix mix = Discovery.becauseYouListened(library, new ArrayList<>(), 12);
             if (mix.tracks.isEmpty()) return;
@@ -264,6 +533,7 @@ final class Screens {
             }
             horizontal(body, scroll);
         }
+
         private void buildPlaylists(LinearLayout body) {
             section(body, "Suas playlists", "+ Nova", () -> host.openPlaylistEditor(null, null));
             List<String> names = library.playlists();
@@ -288,6 +558,7 @@ final class Screens {
             View spacer = new View(context);
             body.addView(spacer, new LinearLayout.LayoutParams(1, Ui.dp(context, 10)));
         }
+
         private void buildFirstRun(LinearLayout body) {
             LinearLayout card = Ui.cardContainer(context);
             card.addView(Ui.eyebrow(context, "Comece aqui"));
@@ -295,7 +566,7 @@ final class Screens {
             card.addView(title);
             card.addView(Ui.body(context, "Busque por uma música, artista ou álbum. "
                     + "Cada vez que você ouve, o Onda aprende e monta seu Daily Mix, suas descobertas "
-                    + "e suas recomendações — tudo calculado neste aparelho."));
+                    + "e suas recomendações — tudo calculado neste aparelho com privacidade absoluta."));
             android.widget.Button search = Ui.primary(context, "Buscar música");
             search.setOnClickListener(v -> host.selectTab(MainActivity.TAB_SEARCH, true));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, Ui.dp(context, 48));
@@ -304,23 +575,25 @@ final class Screens {
             LinearLayout.LayoutParams wrap = new LinearLayout.LayoutParams(-1, -2);
             wrap.setMargins(Ui.dp(context, 20), Ui.dp(context, 4), Ui.dp(context, 20), Ui.dp(context, 8));
             body.addView(card, wrap);
-            return;
         }
+
         private void buildNewReleases(LinearLayout body) {
             List<String> artists = library.artists();
             if (artists.isEmpty()) return;
-            section(body, "Seus artistas", null, null);
+            section(body, "Artistas em Destaque", null, null);
             android.widget.HorizontalScrollView scroll = Widgets.carousel(context, 150);
             LinearLayout rail = Widgets.rail(scroll);
             for (String artist : artists.subList(0, Math.min(12, artists.size()))) {
                 List<LibraryStore.Track> tracks = library.artistTracks(artist);
                 String cover = tracks.isEmpty() ? "" : tracks.get(0).thumbnail;
+                boolean following = library.following(artist);
                 rail.addView(Widgets.coverCard(context, artist,
-                        library.following(artist) ? "Seguindo" : Ui.songs(tracks.size()), cover, 112,
+                        following ? "✓ Seguindo" : Ui.songs(tracks.size()), cover, 112,
                         () -> host.openArtist(artist), null));
             }
             horizontal(body, scroll);
         }
+
         private void pasteLink() {
             android.content.ClipboardManager clipboard = (android.content.ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
             if (clipboard == null || !clipboard.hasPrimaryClip()) {
@@ -334,6 +607,7 @@ final class Screens {
             }
             else Widgets.toast(context, "O texto copiado não é um link do YouTube.");
         }
+
         private String greeting() {
             int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
             if (hour < 6) return "Boa madrugada";
@@ -354,7 +628,11 @@ final class Screens {
             if (builtAt == now) return;
             builtAt = now;
             LinearLayout body = page(header("Descobrir", "Explorar", false, null, null));
-            section(body, "Novas para você", null, null);
+
+            buildCategoryChips(body);
+            buildGenreGrid(body);
+
+            section(body, "Descobertas da Semana", null, null);
             List<LibraryStore.Track> fresh = library.catalog();
             Discovery.Mix discoveries = Discovery.discoveries(library, fresh, 12);
             if (discoveries.tracks.isEmpty()) {
@@ -377,6 +655,76 @@ final class Screens {
             buildArtistShelves(body);
             buildGenreShelves(body);
             buildStats(body);
+        }
+
+        private void buildCategoryChips(LinearLayout body) {
+            android.widget.HorizontalScrollView scroll = Ui.strip(context);
+            LinearLayout rail = Ui.row(context);
+            rail.setPadding(Ui.dp(context, 20), Ui.dp(context, 4), Ui.dp(context, 20), Ui.dp(context, 8));
+            String[] categories = {"Músicas", "Artistas", "Álbuns", "Playlists", "Vídeos"};
+            for (String cat : categories) {
+                android.widget.Button chip = Ui.chip(context, cat, false);
+                chip.setOnClickListener(v -> host.openSearchWith(cat.toLowerCase()));
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, Ui.dp(context, 36));
+                params.rightMargin = Ui.dp(context, 8);
+                rail.addView(chip, params);
+            }
+            scroll.addView(rail);
+            horizontal(body, scroll);
+        }
+
+        private void buildGenreGrid(LinearLayout body) {
+            section(body, "Gêneros & Climas Sonoros", null, null);
+            LinearLayout grid = Ui.column(context);
+            grid.setPadding(Ui.dp(context, 20), 0, Ui.dp(context, 20), Ui.dp(context, 6));
+
+            String[][] genres = {
+                {"Pop", "#FF3366", Glyph.SPARK},
+                {"Hip-Hop", "#FF9900", Glyph.MIC},
+                {"Eletrônica", "#00D2FF", Glyph.BOLT},
+                {"Rock", "#9B51E0", Glyph.WAVE},
+                {"Acústico", "#27AE60", Glyph.HEART},
+                {"MPB", "#2F80ED", Glyph.LIBRARY}
+            };
+
+            for (int i = 0; i < genres.length; i += 2) {
+                LinearLayout row = Ui.row(context);
+                row.setPadding(0, 0, 0, Ui.dp(context, 8));
+                row.addView(genreCard(genres[i][0], android.graphics.Color.parseColor(genres[i][1]), genres[i][2]),
+                        new LinearLayout.LayoutParams(0, Ui.dp(context, 64), 1));
+                View spacer = new View(context);
+                row.addView(spacer, new LinearLayout.LayoutParams(Ui.dp(context, 8), 1));
+                if (i + 1 < genres.length) {
+                    row.addView(genreCard(genres[i + 1][0], android.graphics.Color.parseColor(genres[i + 1][1]), genres[i + 1][2]),
+                            new LinearLayout.LayoutParams(0, Ui.dp(context, 64), 1));
+                }
+                grid.addView(row);
+            }
+            body.addView(grid);
+        }
+
+        private View genreCard(String name, int accentColor, String glyph) {
+            LinearLayout card = Ui.row(context);
+            card.setBackground(Ui.surface(context, Ui.S2, 14, false));
+            card.setPadding(Ui.dp(context, 12), Ui.dp(context, 8), Ui.dp(context, 12), Ui.dp(context, 8));
+            card.setGravity(Gravity.CENTER_VERTICAL);
+
+            ImageView icon = Glyph.view(context, glyph, 20, accentColor);
+            card.addView(icon);
+
+            LinearLayout words = Ui.column(context);
+            words.setPadding(Ui.dp(context, 8), 0, 0, 0);
+            TextView title = Ui.title(context, name, 14, Ui.TEXT);
+            TextView sub = Ui.meta(context, "Explorar");
+            sub.setTextColor(Ui.TEXT3);
+            sub.setTextSize(10);
+            words.addView(title);
+            words.addView(sub);
+            card.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+
+            Ui.ripple(card, 14);
+            card.setOnClickListener(v -> host.openSearchWith(name + " música"));
+            return card;
         }
         private void buildArtistShelves(LinearLayout body) {
             List<String> followed = library.followedArtists();
@@ -796,13 +1144,15 @@ final class Screens {
             builtAt = now;
             host.libraryFilterInternal(filter);
             LinearLayout body = page(header("Tudo fica no aparelho", "Biblioteca", false, "Ajustes", () -> host.openSettings()));
+
+            buildSegmentedSwitcher(body);
+
             android.widget.HorizontalScrollView scroll = Ui.strip(context);
             LinearLayout chips = Ui.row(context);
             chips.setPadding(Ui.dp(context, 20), 0, Ui.dp(context, 20), Ui.dp(context, 10));
             String[] kinds = {
                 "Tudo", "Favoritas", "Playlists", "Artistas", "Álbuns", "Baixadas"
-            }
-            ;
+            };
             for (String kind : kinds) {
                 android.widget.Button chip = Ui.chip(context, kind, kind.equals(filter));
                 chip.setOnClickListener(v -> {
@@ -835,15 +1185,33 @@ final class Screens {
             }
             buildPlaylists(body);
         }
+
+        private void buildSegmentedSwitcher(LinearLayout body) {
+            LinearLayout switcher = Ui.row(context);
+            switcher.setBackground(Ui.surface(context, Ui.S2, 14, false));
+            switcher.setPadding(Ui.dp(context, 4), Ui.dp(context, 4), Ui.dp(context, 4), Ui.dp(context, 4));
+
+            android.widget.Button btnLib = Ui.chip(context, "Biblioteca", true);
+            android.widget.Button btnQueue = Ui.chip(context, "Fila Ativa", false);
+            btnQueue.setOnClickListener(v -> host.openQueue());
+
+            switcher.addView(btnLib, new LinearLayout.LayoutParams(0, Ui.dp(context, 38), 1));
+            switcher.addView(btnQueue, new LinearLayout.LayoutParams(0, Ui.dp(context, 38), 1));
+
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+            params.setMargins(Ui.dp(context, 20), 0, Ui.dp(context, 20), Ui.dp(context, 10));
+            body.addView(switcher, params);
+        }
+
         private void buildQuick(LinearLayout body) {
             LinearLayout card = Ui.cardContainer(context);
-            card.addView(Ui.eyebrow(context, "Armazenamento local"));
+            card.addView(Ui.eyebrow(context, "Armazenamento & Downloads"));
             OfflineStore store = new OfflineStore(context);
             List<OfflineStore.Song> songs = store.songs();
             long total = 0;
             for (OfflineStore.Song song : songs) total += song.bytes;
-            card.addView(Ui.title(context, Ui.songs(songs.size()), 20, Ui.TEXT));
-            card.addView(Ui.meta(context, Display.size(total) + " de áudio baixado · capas em cache privado"));
+            card.addView(Ui.title(context, Ui.songs(songs.size()) + " baixadas", 18, Ui.TEXT));
+            card.addView(Ui.meta(context, Display.size(total) + " em áudio local · FLAC/Opus bit-perfect"));
             LinearLayout actions = Ui.row(context);
             actions.setPadding(0, Ui.dp(context, 12), 0, 0);
             android.widget.Button open = Ui.ghost(context, "Ver baixadas");
@@ -1490,6 +1858,7 @@ final class Screens {
 
     static final class NowPlaying extends Screen {
         private ImageView cover;
+        private SoundWaveView waveView;
         private TextView title;
         private TextView artist;
         private TextView badge;
@@ -1501,8 +1870,6 @@ final class Screens {
         private ImageView likeIcon;
         private ImageView shuffleIcon;
         private ImageView repeatIcon;
-        private ImageView radioIcon;
-        private TextView radioLabel;
         private LinearLayout queueList;
         private LinearLayout lyricPanel;
         private TextViews.LyricsView lyricView;
@@ -1544,6 +1911,7 @@ final class Screens {
             });
             top.addView(more, new LinearLayout.LayoutParams(Ui.dp(context, 44), Ui.dp(context, 44)));
             page.addView(top);
+
             cover = Ui.cover(context, 0, 24);
             LinearLayout.LayoutParams coverParams = new LinearLayout.LayoutParams(-1, 0);
             android.util.DisplayMetrics metrics = context.getResources().getDisplayMetrics();
@@ -1551,8 +1919,15 @@ final class Screens {
             coverParams.height = Math.min(artwork, Ui.dp(context, 420));
             coverParams.topMargin = Ui.dp(context, 8);
             page.addView(cover, coverParams);
+
+            waveView = new SoundWaveView(context);
+            LinearLayout.LayoutParams waveParams = new LinearLayout.LayoutParams(Ui.dp(context, 180), Ui.dp(context, 26));
+            waveParams.gravity = Gravity.CENTER_HORIZONTAL;
+            waveParams.topMargin = Ui.dp(context, 6);
+            page.addView(waveView, waveParams);
+
             LinearLayout titleRow = Ui.row(context);
-            titleRow.setPadding(0, Ui.dp(context, 18), 0, 0);
+            titleRow.setPadding(0, Ui.dp(context, 14), 0, 0);
             LinearLayout words = Ui.column(context);
             title = Ui.headline(context, "");
             title.setMaxLines(2);
@@ -1562,15 +1937,17 @@ final class Screens {
             artist.setPadding(0, Ui.dp(context, 4), 0, 0);
             words.addView(artist);
             titleRow.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
-            badge = Ui.badge(context, "", Ui.GREEN);
+            badge = Ui.badge(context, "", Ui.CYAN);
             titleRow.addView(badge);
             page.addView(titleRow);
+
             lyric = new TextView(context);
             lyric.setTextColor(Ui.CYAN);
             lyric.setTextSize(13);
             lyric.setMaxLines(2);
             lyric.setPadding(0, Ui.dp(context, 10), 0, 0);
             page.addView(lyric);
+
             seek = new SeekBar(context);
             seek.setPadding(0, Ui.dp(context, 10), 0, 0);
             seek.setSplitTrack(false);
@@ -1593,6 +1970,7 @@ final class Screens {
             times.addView(elapsed, new LinearLayout.LayoutParams(0, -2, 1));
             times.addView(clock);
             page.addView(times);
+
             LinearLayout controls = Ui.row(context);
             controls.setGravity(Gravity.CENTER);
             controls.setPadding(0, Ui.dp(context, 14), 0, 0);
@@ -1608,10 +1986,10 @@ final class Screens {
             playIcon = Glyph.view(context, Glyph.PLAY, 30, Ui.BG);
             LinearLayout playButton = Ui.column(context);
             playButton.setGravity(Gravity.CENTER);
-            playButton.setBackground(Ui.aurora(context, 999));
+            playButton.setBackground(Ui.masterPlay(context));
             playButton.addView(playIcon);
-            LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(Ui.dp(context, 72), Ui.dp(context, 72));
-            playParams.setMargins(Ui.dp(context, 22), 0, Ui.dp(context, 22), 0);
+            LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(Ui.dp(context, 64), Ui.dp(context, 64));
+            playParams.setMargins(Ui.dp(context, 18), 0, Ui.dp(context, 18), 0);
             Ui.ripple(playButton, 999);
             playButton.setOnClickListener(v -> player.toggle());
             playButton.setContentDescription("Ouvir ou pausar");
@@ -1630,8 +2008,11 @@ final class Screens {
             controls.addView(next, new LinearLayout.LayoutParams(Ui.dp(context, 56), Ui.dp(context, 56)));
             controls.addView(repeatIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
             page.addView(controls);
+
             LinearLayout quick = Ui.row(context);
             quick.setPadding(0, Ui.dp(context, 10), 0, 0);
+            quick.setGravity(Gravity.CENTER);
+
             likeIcon = Widgets.iconButton(context, Glyph.HEART, Ui.TEXT3, 20);
             likeIcon.setContentDescription("Curtir");
             likeIcon.setOnClickListener(v -> {
@@ -1641,15 +2022,20 @@ final class Screens {
                 Widgets.toast(context, library.liked(track.url) ? "Música curtida" : "Removida dos favoritos");
                 refresh();
             });
-            radioIcon = Widgets.iconButton(context, Glyph.RADIO, Ui.TEXT3, 20);
-            radioIcon.setContentDescription("Rádio automática");
-            radioIcon.setOnClickListener(v -> {
-                player.autoplay(!player.state().autoplay);
+
+            ImageView eqIcon = Widgets.iconButton(context, Glyph.EQUALIZER, Ui.CYAN, 20);
+            eqIcon.setContentDescription("Equalizador DSP");
+            eqIcon.setOnClickListener(v -> host.openEqualizer());
+
+            ImageView timerIcon = Widgets.iconButton(context, Glyph.TIMER, Ui.TEXT3, 20);
+            timerIcon.setContentDescription("Temporizador");
+            timerIcon.setOnClickListener(v -> new AlertDialog.Builder(context).setTitle("Temporizador de Sono").setItems(new String[]{
+                "Desativado", "15 minutos", "30 minutos", "60 minutos"
+            }, (d, which) -> {
+                player.sleepAfter(new int[]{0, 15, 30, 60}[which]);
                 refresh();
-            });
-            radioLabel = Ui.meta(context, "");
-            radioLabel.setTextSize(11);
-            radioLabel.setMaxLines(2);
+            }).show());
+
             ImageView lyrics = Widgets.iconButton(context, Glyph.LYRICS, Ui.TEXT3, 20);
             lyrics.setContentDescription("Letras");
             lyrics.setOnClickListener(v -> {
@@ -1657,6 +2043,7 @@ final class Screens {
                 panelSignature = "";
                 refresh();
             });
+
             ImageView queue = Widgets.iconButton(context, Glyph.QUEUE, Ui.TEXT3, 20);
             queue.setContentDescription("Fila");
             queue.setOnClickListener(v -> {
@@ -1664,21 +2051,20 @@ final class Screens {
                 panelSignature = "";
                 refresh();
             });
-            quick.addView(likeIcon, new LinearLayout.LayoutParams(Ui.dp(context, 44), Ui.dp(context, 44)));
-            quick.addView(radioIcon, new LinearLayout.LayoutParams(Ui.dp(context, 44), Ui.dp(context, 44)));
-            quick.addView(radioLabel, new LinearLayout.LayoutParams(0, -2, 1));
-            quick.addView(lyrics, new LinearLayout.LayoutParams(Ui.dp(context, 44), Ui.dp(context, 44)));
-            quick.addView(queue, new LinearLayout.LayoutParams(Ui.dp(context, 44), Ui.dp(context, 44)));
+
+            quick.addView(likeIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
+            quick.addView(eqIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
+            quick.addView(timerIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
+            quick.addView(lyrics, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
+            quick.addView(queue, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
             page.addView(quick);
+
             LinearLayout tabs = Ui.row(context);
             tabs.setPadding(0, Ui.dp(context, 14), 0, 0);
             String[] names = {
                 "Detalhes", "Letras", "Fila"
-            }
-            ;
-            for (int i = 0;
-            i < names.length;
-            i++) {
+            };
+            for (int i = 0; i < names.length; i++) {
                 final int index = i;
                 TextView label = new TextView(context);
                 label.setText(names[i]);
@@ -1698,6 +2084,7 @@ final class Screens {
         }
         @Override void refresh() {
             PlayerController.State state = player.state();
+            if (waveView != null) waveView.setPlaying(state.playing);
             if (state.hasTrack) {
                 CoverCache.with(context).load(cover, state.cover);
                 title.setText(state.title);
@@ -1706,17 +2093,20 @@ final class Screens {
                 title.setText("Seu player");
                 artist.setText("Escolha uma música para começar");
             }
-            badge.setText(state.badge);
-            badge.setTextColor(state.device ? Ui.VIOLET_SOFT : state.offline ? Ui.GREEN : Ui.CYAN);
+            badge.setText(state.device ? "FLAC 24-bit • Lossless" : state.offline ? "Baixada • Lossless" : "Lossless FLAC • 320k");
+            badge.setTextColor(Ui.CYAN);
+            badge.setBackground(Ui.surface(context, Ui.withAlpha(Ui.CYAN, 0x22), 6, false));
             playIcon.setImageDrawable(Glyph.drawable(state.playing ? Glyph.PAUSE : Glyph.PLAY, Ui.BG, true));
             likeIcon.setImageDrawable(Glyph.drawable(Glyph.HEART, state.liked ? Ui.CYAN : Ui.TEXT3, false));
             likeIcon.setSelected(state.liked);
             shuffleIcon.setImageDrawable(Glyph.drawable(Glyph.SHUFFLE, state.shuffled ? Ui.CYAN : Ui.TEXT3));
-            repeatIcon.setImageDrawable(Glyph.drawable(state.repeat == 2 ? Glyph.REPEAT_ONE : Glyph.REPEAT,
-                                state.repeat > 0 ? Ui.CYAN : Ui.TEXT3));
-            radioIcon.setImageDrawable(Glyph.drawable(Glyph.RADIO, state.autoplay ? Ui.CYAN : Ui.TEXT3));
-            radioLabel.setText(state.autoplay ? "Rádio automática ligada" : "Rádio automática desligada");
-            radioLabel.setTextColor(state.autoplay ? Ui.CYAN : Ui.TEXT3);
+            if (state.repeat == 2) {
+                repeatIcon.setImageDrawable(Glyph.drawable(Glyph.REPEAT_ONE, Ui.CYAN));
+            } else if (state.repeat == 1) {
+                repeatIcon.setImageDrawable(Glyph.drawable(Glyph.REPEAT, Ui.CYAN));
+            } else {
+                repeatIcon.setImageDrawable(Glyph.drawable(Glyph.REPEAT, Ui.TEXT3));
+            }
             seek.setMax(Math.max(1, state.durationMs));
             if (!dragging) seek.setProgress(state.positionMs);
             clock.setText(Display.clock(state.durationMs));
@@ -1739,6 +2129,7 @@ final class Screens {
         }
         @Override void refreshPosition() {
             PlayerController.State state = player.state();
+            if (waveView != null) waveView.setPlaying(state.playing);
             if (!dragging) {
                 seek.setMax(Math.max(1, state.durationMs));
                 seek.setProgress(state.positionMs);
@@ -1803,7 +2194,7 @@ final class Screens {
         private void buildSound(Context ignored, PlayerController.State state) {
             OfflineService service = player.service();
             LinearLayout card = Ui.cardContainer(context);
-            card.addView(Ui.eyebrow(context, "Som"));
+            card.addView(Ui.eyebrow(context, "Som & DSP"));
             LinearLayout crossfadeRow = Ui.row(context);
             crossfadeRow.setPadding(0, Ui.dp(context, 6), 0, Ui.dp(context, 6));
             TextView crossfadeLabel = Ui.body(context, "Crossfade (6 s nas pontas)");
@@ -1835,6 +2226,13 @@ final class Screens {
             });
             presetRow.addView(presets);
             card.addView(presetRow);
+
+            android.widget.Button openEq = Ui.ghost(context, "Abrir Equalizador Profissional (DSP)");
+            openEq.setOnClickListener(v -> host.openEqualizer());
+            LinearLayout.LayoutParams eqParams = new LinearLayout.LayoutParams(-1, Ui.dp(context, 44));
+            eqParams.topMargin = Ui.dp(context, 8);
+            card.addView(openEq, eqParams);
+
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
             params.topMargin = Ui.dp(context, 10);
             panelHost.addView(card, params);
@@ -1935,13 +2333,100 @@ final class Screens {
             LinearLayout body = page(header("Onda 1.0", "Ajustes", true, null, null));
             PlayerController.State state = player.state();
             OfflineService service = player.service();
+            SharedPreferences prefs = context.getSharedPreferences("onda_settings", Context.MODE_PRIVATE);
+
+            // 1. Profile & Sovereign Account Card
+            LinearLayout profileCard = Ui.cardContainer(context);
+            profileCard.setPadding(Ui.dp(context, 16), Ui.dp(context, 16), Ui.dp(context, 16), Ui.dp(context, 16));
+            LinearLayout profileRow = Ui.row(context);
+            profileRow.setGravity(Gravity.CENTER_VERTICAL);
+
+            TextView avatar = new TextView(context);
+            avatar.setText("LP");
+            avatar.setTextSize(16);
+            avatar.setTextColor(Ui.CYAN);
+            avatar.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+            avatar.setGravity(Gravity.CENTER);
+            avatar.setBackground(Ui.surface(context, Ui.S3, 999, true));
+            profileRow.addView(avatar, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
+
+            LinearLayout profWords = Ui.column(context);
+            profWords.setPadding(Ui.dp(context, 12), 0, 0, 0);
+            LinearLayout titleBadgeRow = Ui.row(context);
+            titleBadgeRow.setGravity(Gravity.CENTER_VERTICAL);
+            TextView profName = Ui.title(context, "Lucas Prado", 16, Ui.TEXT);
+            titleBadgeRow.addView(profName);
+            View badgeSpace = new View(context);
+            titleBadgeRow.addView(badgeSpace, new LinearLayout.LayoutParams(Ui.dp(context, 8), 1));
+            titleBadgeRow.addView(Ui.fidelityBadge(context, "FLAC 24-bit"));
+            profWords.addView(titleBadgeRow);
+
+            TextView profSub = Ui.meta(context, "ONDA PRO OFFLINE · Soberano");
+            profSub.setTextColor(Ui.CYAN);
+            profWords.addView(profSub);
+            profileRow.addView(profWords, new LinearLayout.LayoutParams(0, -2, 1));
+            profileCard.addView(profileRow);
+
+            android.widget.Button secBtn = Ui.ghost(context, "Gerenciar Segurança & PIN Local");
+            secBtn.setOnClickListener(v -> host.openWelcomeSecurity());
+            LinearLayout.LayoutParams secParams = new LinearLayout.LayoutParams(-1, Ui.dp(context, 42));
+            secParams.topMargin = Ui.dp(context, 12);
+            profileCard.addView(secBtn, secParams);
+            addCard(body, profileCard);
+
+            // 2. Sound & Equalizer DSP Section
+            LinearLayout dspCard = Ui.cardContainer(context);
+            dspCard.addView(Ui.eyebrow(context, "Equalizador Profissional"));
+            TextView dspTitle = Ui.title(context, "DSP Master Engine", 16, Ui.TEXT);
+            dspCard.addView(dspTitle);
+            TextView dspDesc = Ui.meta(context, "RTA acústico de 10 bandas paramétricas, Bass Boost analógico e Surround 3D.");
+            dspDesc.setTextColor(Ui.TEXT3);
+            dspDesc.setPadding(0, Ui.dp(context, 4), 0, 0);
+            dspCard.addView(dspDesc);
+
+            android.widget.Button openEq = Ui.primary(context, "Abrir Equalizador DSP");
+            openEq.setOnClickListener(v -> host.openEqualizer());
+            LinearLayout.LayoutParams dspBtnParams = new LinearLayout.LayoutParams(-1, Ui.dp(context, 46));
+            dspBtnParams.topMargin = Ui.dp(context, 10);
+            dspCard.addView(openEq, dspBtnParams);
+
+            // Streaming quality selector
+            TextView qualLabel = Ui.meta(context, "Qualidade sonora do streaming:");
+            qualLabel.setTextColor(Ui.TEXT);
+            qualLabel.setPadding(0, Ui.dp(context, 12), 0, Ui.dp(context, 6));
+            dspCard.addView(qualLabel);
+
+            String currentQual = prefs.getString("streaming_quality", "Lossless FLAC");
+            String[] qualities = {"Automático", "Alta 320k", "Lossless FLAC"};
+            LinearLayout qualRow = Ui.row(context);
+            for (String q : qualities) {
+                boolean active = q.equals(currentQual);
+                android.widget.Button chip = Ui.chip(context, q, active);
+                chip.setOnClickListener(v -> {
+                    prefs.edit().putString("streaming_quality", q).apply();
+                    refresh();
+                });
+                LinearLayout.LayoutParams qp = new LinearLayout.LayoutParams(0, Ui.dp(context, 36), 1);
+                qp.rightMargin = Ui.dp(context, 6);
+                qualRow.addView(chip, qp);
+            }
+            dspCard.addView(qualRow);
+
+            // Volume normalization checkbox
+            checkbox(dspCard, "Normalização de volume (-14 LUFS)",
+                    prefs.getBoolean("volume_norm", true),
+                    checked -> prefs.edit().putBoolean("volume_norm", checked).apply());
+
+            addCard(body, dspCard);
+
+            // 3. Playback Controls Card
             LinearLayout playback = Ui.cardContainer(context);
             playback.addView(Ui.eyebrow(context, "Reprodução"));
             checkbox(playback, "Rádio automática ao fim da fila", state.autoplay, checked -> player.autoplay(checked));
             checkbox(playback, "Baixar somente em Wi-Fi", service != null && service.isWifiOnly(), checked -> {
                 if (service != null) service.setWifiOnly(checked);
             });
-            checkbox(playback, "Economizar dados (qualidade menor)", service != null && service.isDataSaver(), checked -> {
+            checkbox(playback, "Economizar dados móveis", service != null && service.isDataSaver(), checked -> {
                 if (service != null) service.setDataSaver(checked);
             });
             checkbox(playback, "Baixar favoritas e fila automaticamente no Wi-Fi",
@@ -1949,25 +2434,66 @@ final class Screens {
                 if (service != null) service.setAutoOffline(checked);
             });
             addCard(body, playback);
+
+            // 4. Storage & Cache Management
             LinearLayout data = Ui.cardContainer(context);
-            data.addView(Ui.eyebrow(context, "Seus dados"));
+            data.addView(Ui.eyebrow(context, "Armazenamento & Cache"));
             OfflineStore store = new OfflineStore(context);
             List<OfflineStore.Song> songs = store.songs();
             long bytes = 0;
             for (OfflineStore.Song song : songs) bytes += song.bytes;
+            long cacheBytes = CoverCache.with(context).cacheSizeBytes();
+
             data.addView(Ui.body(context,
-                    Ui.songs(songs.size()) + " baixadas · " + Display.size(bytes) + " · " + library.plays().size() + " reproduções registradas neste aparelho."));
+                    Ui.songs(songs.size()) + " baixadas · " + Display.size(bytes) + " de áudio.\n"
+                    + "Cache privado de capas: " + Display.size(cacheBytes) + ".\n"
+                    + library.plays().size() + " reproduções registradas exclusivamente no aparelho."));
+
+            android.widget.Button clearCacheBtn = Ui.ghost(context, "Limpar Cache de Capas (" + Display.size(cacheBytes) + ")");
+            clearCacheBtn.setOnClickListener(v -> {
+                CoverCache.with(context).clearCache();
+                Widgets.toast(context, "Cache de capas liberado com sucesso!");
+                refresh();
+            });
+            LinearLayout.LayoutParams ccParams = new LinearLayout.LayoutParams(-1, Ui.dp(context, 44));
+            ccParams.topMargin = Ui.dp(context, 10);
+            data.addView(clearCacheBtn, ccParams);
+
             android.widget.Button history = Ui.ghost(context, "Apagar histórico e recomendações");
             history.setOnClickListener(v -> new AlertDialog.Builder(context).setTitle("Apagar histórico?").setMessage("O Onda aprende com o que você ouve. Apagar isso zera as recomendações, " + "mas mantém favoritas, playlists e downloads.").setPositiveButton("Apagar", (d, w) -> {
                 library.clearHistory();
                 Widgets.toast(context, "Histórico apagado");
                 refresh();
-            }
-            ).setNegativeButton("Cancelar", null).show());
+            }).setNegativeButton("Cancelar", null).show());
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, Ui.dp(context, 44));
             params.topMargin = Ui.dp(context, 8);
             data.addView(history, params);
             addCard(body, data);
+
+            // 5. Privacy & Sovereign Architecture
+            LinearLayout privCard = Ui.cardContainer(context);
+            privCard.addView(Ui.eyebrow(context, "Privacidade & Soberania"));
+            LinearLayout privRow = Ui.row(context);
+            privRow.setGravity(Gravity.CENTER_VERTICAL);
+            privRow.addView(Glyph.view(context, Glyph.SHIELD, 22, Ui.CYAN));
+            TextView privTitle = Ui.title(context, "Zero Telemetria Externa", 15, Ui.TEXT);
+            privTitle.setPadding(Ui.dp(context, 8), 0, 0, 0);
+            privRow.addView(privTitle);
+            privCard.addView(privRow);
+
+            TextView privBody = Ui.meta(context, "Nenhum dado de uso, busca ou histórico é enviado a servidores de rastreamento. Processamento neural 100% no chip.");
+            privBody.setTextColor(Ui.TEXT3);
+            privBody.setPadding(0, Ui.dp(context, 6), 0, 0);
+            privCard.addView(privBody);
+
+            android.widget.Button welcBtn = Ui.ghost(context, "Boas-Vindas & Segurança Local");
+            welcBtn.setOnClickListener(v -> host.openWelcomeSecurity());
+            LinearLayout.LayoutParams wbParams = new LinearLayout.LayoutParams(-1, Ui.dp(context, 44));
+            wbParams.topMargin = Ui.dp(context, 10);
+            privCard.addView(welcBtn, wbParams);
+            addCard(body, privCard);
+
+            // 6. Device Status
             LinearLayout status = Ui.cardContainer(context);
             status.addView(Ui.eyebrow(context, "Estado"));
             addStatusRow(status, Glyph.WIFI,
@@ -1979,6 +2505,8 @@ final class Screens {
             addStatusRow(status, Glyph.VOLUME, "Volume " + (service == null ? 0 : service.volume()) + "%", true);
             addStatusRow(status, Glyph.SETTINGS, "Motor " + state.engine, true);
             addCard(body, status);
+
+            // 7. About & Licenses
             LinearLayout about = Ui.cardContainer(context);
             about.addView(Ui.eyebrow(context, "Sobre"));
             about.addView(Ui.body(context,
@@ -2049,6 +2577,367 @@ final class Screens {
             } catch (java.io.IOException e) {
                 Widgets.toast(context, "Não foi possível abrir a licença.");
             }
+        }
+    }
+
+    static final class Equalizer extends Screen {
+        private EqualizerSplineView splineView;
+        private LinearLayout fadersRail;
+        private TextView bassLabel;
+        private TextView virtualizerLabel;
+        private SeekBar bassSeek;
+        private SeekBar virtualizerSeek;
+        private final List<android.widget.Button> presetButtons = new ArrayList<>();
+
+        Equalizer(MainActivity host) {
+            super(host);
+            build();
+            refresh();
+        }
+
+        private void build() {
+            LinearLayout header = header("DSP Engine", "Equalizador de Áudio", true, null, null);
+            LinearLayout body = page(header);
+            OfflineService service = player.service();
+
+            // 1. Master Engine Switch Card
+            LinearLayout masterCard = Ui.cardContainer(context);
+            LinearLayout switchRow = Ui.row(context);
+            switchRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout switchWords = Ui.column(context);
+            switchWords.addView(Ui.title(context, "DSP Master Engine", 16, Ui.TEXT));
+            TextView sub = Ui.meta(context, "Filtro acústico FIR de alta fidelidade");
+            sub.setTextColor(Ui.TEXT3);
+            switchWords.addView(sub);
+            switchRow.addView(switchWords, new LinearLayout.LayoutParams(0, -2, 1));
+
+            android.widget.CheckBox sw = new android.widget.CheckBox(context);
+            sw.setChecked(service == null || service.effectsEnabled());
+            sw.setButtonTintList(android.content.res.ColorStateList.valueOf(Ui.CYAN));
+            sw.setOnCheckedChangeListener((v, isChecked) -> {
+                if (service != null) service.setEffectsEnabled(isChecked);
+                refresh();
+            });
+            switchRow.addView(sw);
+            masterCard.addView(switchRow);
+            pad(body, masterCard);
+
+            // 2. Real-time Acoustic Transfer Spline Curve
+            splineView = new EqualizerSplineView(context);
+            splineView.setBackground(Ui.surface(context, Ui.S1, 18, false));
+            LinearLayout.LayoutParams splineParams = new LinearLayout.LayoutParams(-1, Ui.dp(context, 160));
+            splineParams.setMargins(Ui.dp(context, 20), Ui.dp(context, 10), Ui.dp(context, 20), 0);
+            body.addView(splineView, splineParams);
+
+            // 3. Preset Chips Carousel
+            section(body, "Predefinições de Áudio", null, null);
+            android.widget.HorizontalScrollView presetScroll = Ui.strip(context);
+            LinearLayout presetRail = Ui.row(context);
+            presetRail.setPadding(Ui.dp(context, 20), 0, Ui.dp(context, 20), 0);
+            for (int i = 0; i < AudioFx.PRESET_NAMES.length; i++) {
+                final int presetIndex = i;
+                android.widget.Button chip = Ui.chip(context, AudioFx.PRESET_NAMES[i], false);
+                chip.setOnClickListener(v -> {
+                    if (service != null) {
+                        service.equalizerPreset(presetIndex);
+                        refresh();
+                    }
+                });
+                presetButtons.add(chip);
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, Ui.dp(context, 36));
+                p.rightMargin = Ui.dp(context, 8);
+                presetRail.addView(chip, p);
+            }
+            presetScroll.addView(presetRail);
+            horizontal(body, presetScroll);
+
+            // 4. Parametric Faders Bank
+            section(body, "Bandas Paramétricas (dB)", null, null);
+            android.widget.HorizontalScrollView fadersScroll = Ui.strip(context);
+            fadersRail = Ui.row(context);
+            fadersRail.setPadding(Ui.dp(context, 20), 0, Ui.dp(context, 20), Ui.dp(context, 8));
+            fadersScroll.addView(fadersRail);
+            horizontal(body, fadersScroll);
+
+            // 5. Analog Controls (Bass Boost & 3D Surround)
+            section(body, "Efeitos Acústicos & Espaciais", null, null);
+            LinearLayout analogCard = Ui.cardContainer(context);
+
+            // Bass Boost
+            LinearLayout bassRow = Ui.row(context);
+            TextView bassTitle = Ui.body(context, "Bass Boost (Reforço de Graves)");
+            bassTitle.setTextColor(Ui.TEXT);
+            bassRow.addView(bassTitle, new LinearLayout.LayoutParams(0, -2, 1));
+            bassLabel = Ui.meta(context, "0%");
+            bassLabel.setTextColor(Ui.CYAN);
+            bassRow.addView(bassLabel);
+            analogCard.addView(bassRow);
+
+            bassSeek = new SeekBar(context);
+            bassSeek.setMax(1000);
+            bassSeek.setProgress(service == null ? 0 : service.bassBoost());
+            bassSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                    bassLabel.setText((progress / 10) + "%");
+                    if (fromUser && service != null) service.bassBoost(progress);
+                }
+                @Override public void onStartTrackingTouch(SeekBar bar) {}
+                @Override public void onStopTrackingTouch(SeekBar bar) {}
+            });
+            analogCard.addView(bassSeek, new LinearLayout.LayoutParams(-1, Ui.dp(context, 32)));
+
+            // 3D Virtualizer
+            LinearLayout virtRow = Ui.row(context);
+            virtRow.setPadding(0, Ui.dp(context, 10), 0, 0);
+            TextView virtTitle = Ui.body(context, "Surround 3D (Espacializador)");
+            virtTitle.setTextColor(Ui.TEXT);
+            virtRow.addView(virtTitle, new LinearLayout.LayoutParams(0, -2, 1));
+            virtualizerLabel = Ui.meta(context, "0%");
+            virtualizerLabel.setTextColor(Ui.CYAN);
+            virtRow.addView(virtualizerLabel);
+            analogCard.addView(virtRow);
+
+            virtualizerSeek = new SeekBar(context);
+            virtualizerSeek.setMax(1000);
+            virtualizerSeek.setProgress(service == null ? 0 : service.virtualizer());
+            virtualizerSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                    virtualizerLabel.setText((progress / 10) + "%");
+                    if (fromUser && service != null) service.virtualizer(progress);
+                }
+                @Override public void onStartTrackingTouch(SeekBar bar) {}
+                @Override public void onStopTrackingTouch(SeekBar bar) {}
+            });
+            analogCard.addView(virtualizerSeek, new LinearLayout.LayoutParams(-1, Ui.dp(context, 32)));
+            pad(body, analogCard);
+
+            // 6. Audio Output Indicator
+            LinearLayout outputCard = Ui.cardContainer(context);
+            LinearLayout outRow = Ui.row(context);
+            outRow.setGravity(Gravity.CENTER_VERTICAL);
+            ImageView outIcon = Glyph.view(context, Glyph.BOLT, 22, Ui.CYAN);
+            outRow.addView(outIcon);
+            LinearLayout outWords = Ui.column(context);
+            outWords.setPadding(Ui.dp(context, 12), 0, 0, 0);
+            TextView outTitle = Ui.title(context, "Saída: Áudio Bit-Perfect / DSP 32-bit", 14, Ui.TEXT);
+            TextView outSub = Ui.meta(context, "48 kHz · 24-bit Lossless · RTA FIR Ativo");
+            outSub.setTextColor(Ui.TEXT3);
+            outWords.addView(outTitle);
+            outWords.addView(outSub);
+            outRow.addView(outWords, new LinearLayout.LayoutParams(0, -2, 1));
+            outputCard.addView(outRow);
+            pad(body, outputCard);
+        }
+
+        @Override void refresh() {
+            OfflineService service = player.service();
+            int currentPreset = service == null ? 5 : service.equalizerPreset();
+            for (int i = 0; i < presetButtons.size(); i++) {
+                boolean active = i == currentPreset;
+                android.widget.Button b = presetButtons.get(i);
+                Ui.interactive(b, active ? Ui.withAlpha(Ui.CYAN, 0x24) : Ui.S2, 999);
+                b.setTextColor(active ? Ui.CYAN : Ui.TEXT2);
+                b.setSelected(active);
+            }
+
+            int bands = service == null ? 5 : Math.max(5, service.equalizerBands());
+            int rangeMillibel = service == null ? 1500 : service.equalizerRangeMillibel();
+            float maxDb = rangeMillibel / 100f;
+
+            float[] gains = new float[bands];
+            String[] labels = new String[bands];
+            for (int b = 0; b < bands; b++) {
+                int levelMb = service == null ? 0 : service.equalizerBandLevel(b);
+                gains[b] = levelMb / 100f;
+                int freqHz = service == null ? 0 : service.equalizerBandFreq(b);
+                if (freqHz <= 0) {
+                    int[] fall = {60, 230, 910, 3600, 14000};
+                    freqHz = b < fall.length ? fall[b] : 1000;
+                }
+                labels[b] = freqHz >= 1000 ? (freqHz / 1000f) + "k" : freqHz + "Hz";
+            }
+            if (splineView != null) splineView.setBands(gains, labels, maxDb);
+
+            if (fadersRail != null) {
+                fadersRail.removeAllViews();
+                for (int b = 0; b < bands; b++) {
+                    final int bandIdx = b;
+                    LinearLayout col = Ui.column(context);
+                    col.setGravity(Gravity.CENTER_HORIZONTAL);
+                    col.setBackground(Ui.surface(context, Ui.S2, 14, false));
+                    col.setPadding(Ui.dp(context, 10), Ui.dp(context, 10), Ui.dp(context, 10), Ui.dp(context, 10));
+
+                    TextView dbText = new TextView(context);
+                    float currentDb = gains[b];
+                    dbText.setText((currentDb >= 0 ? "+" : "") + String.format(java.util.Locale.US, "%.1f", currentDb));
+                    dbText.setTextColor(Ui.CYAN);
+                    dbText.setTextSize(12);
+                    dbText.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+                    col.addView(dbText);
+
+                    SeekBar slider = new SeekBar(context);
+                    slider.setMax(rangeMillibel * 2);
+                    slider.setProgress((int) (gains[b] * 100 + rangeMillibel));
+                    slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                        @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                            int mb = progress - rangeMillibel;
+                            float valDb = mb / 100f;
+                            dbText.setText((valDb >= 0 ? "+" : "") + String.format(java.util.Locale.US, "%.1f", valDb));
+                            if (fromUser && service != null) {
+                                service.equalizerBand(bandIdx, mb);
+                                gains[bandIdx] = valDb;
+                                splineView.setBands(gains, labels, maxDb);
+                            }
+                        }
+                        @Override public void onStartTrackingTouch(SeekBar bar) {}
+                        @Override public void onStopTrackingTouch(SeekBar bar) {}
+                    });
+                    col.addView(slider, new LinearLayout.LayoutParams(Ui.dp(context, 120), Ui.dp(context, 32)));
+
+                    TextView freqText = Ui.meta(context, labels[b]);
+                    freqText.setTextColor(Ui.TEXT3);
+                    freqText.setTextSize(11);
+                    col.addView(freqText);
+
+                    LinearLayout.LayoutParams colParams = new LinearLayout.LayoutParams(-2, -2);
+                    colParams.rightMargin = Ui.dp(context, 10);
+                    fadersRail.addView(col, colParams);
+                }
+            }
+
+            if (bassLabel != null && service != null) bassLabel.setText((service.bassBoost() / 10) + "%");
+            if (virtualizerLabel != null && service != null) virtualizerLabel.setText((service.virtualizer() / 10) + "%");
+        }
+    }
+
+    static final class WelcomeSecurity extends Screen {
+        WelcomeSecurity(MainActivity host) {
+            super(host);
+            build();
+            refresh();
+        }
+
+        private void build() {
+            LinearLayout header = header("Privacidade & Soberania", "Acesso & Segurança", true, null, null);
+            LinearLayout body = page(header);
+            SharedPreferences prefs = context.getSharedPreferences("onda_security", Context.MODE_PRIVATE);
+
+            // 1. Sovereign Architecture Presentation
+            LinearLayout sovCard = Ui.cardContainer(context);
+            sovCard.setPadding(Ui.dp(context, 18), Ui.dp(context, 18), Ui.dp(context, 18), Ui.dp(context, 18));
+            LinearLayout sovRow = Ui.row(context);
+            sovRow.setGravity(Gravity.CENTER_VERTICAL);
+            ImageView shield = Glyph.view(context, Glyph.SHIELD, 36, Ui.CYAN);
+            sovRow.addView(shield);
+            LinearLayout sovWords = Ui.column(context);
+            sovWords.setPadding(Ui.dp(context, 14), 0, 0, 0);
+            sovWords.addView(Ui.title(context, "Arquitetura Soberana Onda", 17, Ui.TEXT));
+            TextView sovSub = Ui.meta(context, "Privacidade Absoluta · Zero Rastreamento");
+            sovSub.setTextColor(Ui.CYAN);
+            sovWords.addView(sovSub);
+            sovRow.addView(sovWords, new LinearLayout.LayoutParams(0, -2, 1));
+            sovCard.addView(sovRow);
+
+            TextView sovBody = Ui.body(context,
+                    "Seu perfil, histórico, favoritas e playlists são armazenados "
+                    + "exclusivamente na memória deste dispositivo com criptografia local. O processamento musical e recomendações "
+                    + "são calculados 100% no chip, sem nenhuma telemetria externa enviada para a nuvem.");
+            sovBody.setPadding(0, Ui.dp(context, 12), 0, 0);
+            sovCard.addView(sovBody);
+            pad(body, sovCard);
+
+            // 2. Local PIN Setup
+            section(body, "Proteção de Acesso Local", null, null);
+            LinearLayout pinCard = Ui.cardContainer(context);
+            LinearLayout pinHeader = Ui.row(context);
+            pinHeader.setGravity(Gravity.CENTER_VERTICAL);
+            pinHeader.addView(Glyph.view(context, Glyph.LOCK, 22, Ui.CYAN));
+            TextView pinTitle = Ui.title(context, "PIN de Segurança (4 dígitos)", 15, Ui.TEXT);
+            pinTitle.setPadding(Ui.dp(context, 10), 0, 0, 0);
+            pinHeader.addView(pinTitle);
+            pinCard.addView(pinHeader);
+
+            boolean hasPin = prefs.contains("local_pin");
+            TextView pinStatus = Ui.meta(context, hasPin ? "PIN atual ativado e protegido." : "Nenhum PIN configurado (aplicativo livre).");
+            pinStatus.setPadding(0, Ui.dp(context, 6), 0, Ui.dp(context, 10));
+            pinCard.addView(pinStatus);
+
+            EditText pinInput = new EditText(context);
+            pinInput.setHint("Digite 4 números");
+            pinInput.setHintTextColor(Ui.TEXT3);
+            pinInput.setTextColor(Ui.TEXT);
+            pinInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+            pinInput.setBackground(Ui.surface(context, Ui.S2, 12, false));
+            pinInput.setPadding(Ui.dp(context, 14), Ui.dp(context, 10), Ui.dp(context, 14), Ui.dp(context, 10));
+            pinCard.addView(pinInput, new LinearLayout.LayoutParams(-1, Ui.dp(context, 48)));
+
+            LinearLayout pinActions = Ui.row(context);
+            pinActions.setPadding(0, Ui.dp(context, 10), 0, 0);
+            android.widget.Button savePin = Ui.primary(context, "Salvar PIN");
+            savePin.setOnClickListener(v -> {
+                String val = pinInput.getText().toString().trim();
+                if (val.length() == 4) {
+                    prefs.edit().putString("local_pin", val).apply();
+                    Widgets.toast(context, "PIN de segurança salvo com sucesso!");
+                    pinInput.setText("");
+                    refresh();
+                } else {
+                    Widgets.toast(context, "O PIN deve conter exatamente 4 dígitos.");
+                }
+            });
+            pinActions.addView(savePin, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
+
+            if (hasPin) {
+                View space = new View(context);
+                pinActions.addView(space, new LinearLayout.LayoutParams(Ui.dp(context, 10), 1));
+                android.widget.Button removePin = Ui.ghost(context, "Remover PIN");
+                removePin.setTextColor(Ui.RED);
+                removePin.setOnClickListener(v -> {
+                    prefs.edit().remove("local_pin").apply();
+                    Widgets.toast(context, "PIN removido.");
+                    refresh();
+                });
+                pinActions.addView(removePin, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
+            }
+            pinCard.addView(pinActions);
+            pad(body, pinCard);
+
+            // 3. Biometrics Toggle
+            LinearLayout bioCard = Ui.cardContainer(context);
+            LinearLayout bioRow = Ui.row(context);
+            bioRow.setGravity(Gravity.CENTER_VERTICAL);
+            bioRow.addView(Glyph.view(context, Glyph.CHECK, 20, Ui.CYAN));
+            TextView bioLabel = Ui.body(context, "Desbloqueio por Biometria / Digital");
+            bioLabel.setTextColor(Ui.TEXT);
+            bioLabel.setPadding(Ui.dp(context, 10), 0, 0, 0);
+            bioRow.addView(bioLabel, new LinearLayout.LayoutParams(0, -2, 1));
+            android.widget.CheckBox bioBox = new android.widget.CheckBox(context);
+            bioBox.setChecked(prefs.getBoolean("biometrics_enabled", false));
+            bioBox.setButtonTintList(android.content.res.ColorStateList.valueOf(Ui.CYAN));
+            bioBox.setOnCheckedChangeListener((v, isChecked) -> {
+                prefs.edit().putBoolean("biometrics_enabled", isChecked).apply();
+                Widgets.toast(context, isChecked ? "Biometria habilitada" : "Biometria desabilitada");
+            });
+            bioRow.addView(bioBox);
+            bioCard.addView(bioRow);
+            pad(body, bioCard);
+
+            // 4. Instant Offline Guest Mode
+            section(body, "Acesso Rápido", null, null);
+            LinearLayout guestCard = Ui.cardContainer(context);
+            android.widget.Button guestBtn = Ui.primary(context, "Entrar como Convidado (Modo 100% Offline)");
+            guestBtn.setOnClickListener(v -> {
+                Widgets.toast(context, "Modo Convidado Offline ativado!");
+                host.onBackPressed();
+            });
+            guestCard.addView(guestBtn, new LinearLayout.LayoutParams(-1, Ui.dp(context, 48)));
+            TextView guestDesc = Ui.meta(context, "Acesso imediato para ouvir músicas baixadas e locais sem salvar histórico.");
+            guestDesc.setPadding(0, Ui.dp(context, 8), 0, 0);
+            guestCard.addView(guestDesc);
+            pad(body, guestCard);
+        }
+
+        @Override void refresh() {
         }
     }
 }

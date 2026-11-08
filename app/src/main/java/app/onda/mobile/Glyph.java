@@ -46,6 +46,15 @@ public final class Glyph {
     public static final String DOWN      = "M12 5v13M6.6 12.6 12 18l5.4-5.4";
     public static final String WIFI      = "M3.6 9.6a13 13 0 0 1 16.8 0M6.6 13a8.4 8.4 0 0 1 10.8 0M9.6 16.4a3.8 3.8 0 0 1 4.8 0M12 19.2v.2";
     public static final String SETTINGS  = "M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6ZM19.2 12a7.2 7.2 0 0 0-.2-1.6l2-1.6-1.8-3.1-2.4 1a7.2 7.2 0 0 0-2.8-1.6L13.6 2h-3.2l-.4 2.6a7.2 7.2 0 0 0-2.8 1.6l-2.4-1L3 8.8l2 1.6a7.2 7.2 0 0 0 0 3.2l-2 1.6 1.8 3.1 2.4-1a7.2 7.2 0 0 0 2.8 1.6l.4 2.6h3.2l.4-2.6a7.2 7.2 0 0 0 2.8-1.6l2.4 1 1.8-3.1-2-1.6a7.2 7.2 0 0 0 .2-1.6Z";
+    public static final String EQUALIZER = "M4 19v-6M4 9V5M12 19v-2M12 13V5M20 19v-10M20 5v0M2 13h4M10 17h4M18 9h4";
+    public static final String BOLT      = "M13 2 4 14h6l-1 8 9-12h-6l1-8Z";
+    public static final String PERSON    = "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 20a8 8 0 0 1 16 0";
+    public static final String SHIELD    = "M12 3 4 6v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V6l-8-3Z";
+    public static final String WAVE      = "M3 12h2l2-6 3 12 3-10 2 6 2-3 2 1h3";
+    public static final String CHECK     = "M5 13l4 4L19 7";
+    public static final String LOCK      = "M7 11V7a5 5 0 0 1 10 0v4M5 11h14v10H5z";
+    public static final String MIC       = "M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8";
+    public static final String TIMER     = "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm1-13h-2v6l5.25 3.15.75-1.23-4-2.37z";
 
     private Glyph() {}
 

@@ -26,17 +26,20 @@ final class Widgets {
         /** Play, open, or navigate — whatever the row's primary intent is. */
         void onPrimary(LibraryStore.Track track, View row);
 
-        default void onLongPress(LibraryStore.Track track, View row) { onMore(track, row); }
+        default void onLongPress(LibraryStore.Track track, View row) {
+            onMore(track, row);
+        }
 
         void onMore(LibraryStore.Track track, View row);
     }
 
-    private Widgets() {}
+    private Widgets() {
+    }
 
     // --------------------------------------------------------------- rows
     /** 64 dp track row: cover, title, meta, optional badge, overflow. */
     static LinearLayout trackRow(Context context, LibraryStore.Track track, String meta, String badge,
-                                 int badgeColor, boolean highlight, TrackAction action) {
+            int badgeColor, boolean highlight, TrackAction action) {
         LinearLayout row = Ui.row(context);
         row.setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 6), Ui.dp(context, 8));
         row.setBackground(Ui.surface(context, highlight ? Ui.withAlpha(Ui.CYAN, 0x14) : Ui.S1, 16, false));
@@ -72,13 +75,16 @@ final class Widgets {
 
         row.setContentDescription("Reproduzir " + track.title + (detail.isEmpty() ? "" : ", " + detail));
         row.setOnClickListener(v -> action.onPrimary(track, row));
-        row.setOnLongClickListener(v -> { action.onLongPress(track, row); return true; });
+        row.setOnLongClickListener(v -> {
+            action.onLongPress(track, row);
+            return true;
+        });
         row.setFocusable(true);
         return row;
     }
 
     static void addTrackRow(LinearLayout parent, Context context, LibraryStore.Track track, String meta,
-                            String badge, int badgeColor, boolean highlight, TrackAction action) {
+            String badge, int badgeColor, boolean highlight, TrackAction action) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.bottomMargin = Ui.dp(context, 6);
         parent.addView(trackRow(context, track, meta, badge, badgeColor, highlight, action), params);
@@ -86,7 +92,7 @@ final class Widgets {
 
     /** 44 dp compact row for dense lists (queue preview, lyrics tab). */
     static LinearLayout compactRow(Context context, LibraryStore.Track track, String meta, boolean current,
-                                   TrackAction action) {
+            TrackAction action) {
         LinearLayout row = Ui.row(context);
         row.setPadding(Ui.dp(context, 6), Ui.dp(context, 4), Ui.dp(context, 6), Ui.dp(context, 4));
         ImageView cover = Ui.cover(context, 40, 8);
@@ -102,7 +108,10 @@ final class Widgets {
         words.addView(subtitle);
         row.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
         row.setOnClickListener(v -> action.onPrimary(track, row));
-        row.setOnLongClickListener(v -> { action.onLongPress(track, row); return true; });
+        row.setOnLongClickListener(v -> {
+            action.onLongPress(track, row);
+            return true;
+        });
         row.setContentDescription((current ? "Tocando agora: " : "") + track.title);
         return row;
     }
@@ -110,16 +119,37 @@ final class Widgets {
     // -------------------------------------------------------------- cards
     /** Square card for a home/explore carousel. */
     static LinearLayout coverCard(Context context, String title, String subtitle, String coverUrl,
-                                  int widthDp, Runnable click, Runnable more) {
+            int widthDp, Runnable click, Runnable more) {
         LinearLayout card = Ui.column(context);
         card.setPadding(Ui.dp(context, 10), Ui.dp(context, 10), Ui.dp(context, 10), Ui.dp(context, 12));
         card.setBackground(Ui.card(18));
+
+        android.widget.FrameLayout artFrame = new android.widget.FrameLayout(context);
         ImageView image = Ui.cover(context, 0, 14);
-        LinearLayout.LayoutParams imageParams = new LinearLayout.LayoutParams(
+        android.widget.FrameLayout.LayoutParams imageParams = new android.widget.FrameLayout.LayoutParams(
                 Ui.dp(context, widthDp - 20), Ui.dp(context, widthDp - 20));
         image.setLayoutParams(imageParams);
         CoverCache.with(context).load(image, coverUrl);
-        card.addView(image, imageParams);
+        artFrame.addView(image, imageParams);
+
+        // Circular Electric Cyan Play button overlay
+        LinearLayout playOverlay = Ui.column(context);
+        playOverlay.setGravity(Gravity.CENTER);
+        playOverlay.setBackground(Ui.surface(context, Ui.CYAN, 999, false));
+        ImageView playIcon = Glyph.view(context, Glyph.PLAY, 16, Ui.S0);
+        playOverlay.addView(playIcon);
+        android.widget.FrameLayout.LayoutParams playParams = new android.widget.FrameLayout.LayoutParams(
+                Ui.dp(context, 34), Ui.dp(context, 34), Gravity.BOTTOM | Gravity.END);
+        playParams.setMargins(0, 0, Ui.dp(context, 6), Ui.dp(context, 6));
+        playOverlay.setOnClickListener(v -> {
+            if (click != null)
+                click.run();
+        });
+        playOverlay.setContentDescription("Tocar " + title);
+        Ui.ripple(playOverlay, 999);
+        artFrame.addView(playOverlay, playParams);
+
+        card.addView(artFrame, new LinearLayout.LayoutParams(-2, -2));
         TextView name = Ui.title(context, title, 14, Ui.TEXT);
         name.setMaxLines(2);
         name.setPadding(0, Ui.dp(context, 10), 0, 0);
@@ -131,8 +161,15 @@ final class Widgets {
         params.rightMargin = Ui.dp(context, 10);
         card.setLayoutParams(params);
         Ui.ripple(card, 18);
-        card.setOnClickListener(v -> { if (click != null) click.run(); });
-        if (more != null) card.setOnLongClickListener(v -> { more.run(); return true; });
+        card.setOnClickListener(v -> {
+            if (click != null)
+                click.run();
+        });
+        if (more != null)
+            card.setOnLongClickListener(v -> {
+                more.run();
+                return true;
+            });
         return card;
     }
 
@@ -170,9 +207,11 @@ final class Widgets {
         return view;
     }
 
-    /** The one place a track menu is defined, so every screen offers the same verbs. */
+    /**
+     * The one place a track menu is defined, so every screen offers the same verbs.
+     */
     static void trackMenu(Context context, LibraryStore library, LibraryStore.Track track, String collectionKey,
-                          String collectionName, Runnable onChanged) {
+            String collectionName, Runnable onChanged) {
         List<String> labels = new ArrayList<>();
         List<Runnable> actions = new ArrayList<>();
 
@@ -193,13 +232,17 @@ final class Widgets {
         actions.add(() -> {
             library.toggleLike(track);
             toast(context, library.liked(track.url) ? "Música curtida" : "Removida dos favoritos");
-            if (onChanged != null) onChanged.run();
+            if (onChanged != null)
+                onChanged.run();
         });
         labels.add("Adicionar à playlist");
         actions.add(() -> {
             if (context instanceof android.app.Activity)
                 LibraryDialogs.save((android.app.Activity) context, track,
-                        () -> { if (onChanged != null) onChanged.run(); });
+                        () -> {
+                            if (onChanged != null)
+                                onChanged.run();
+                        });
         });
         labels.add("Baixar áudio");
         actions.add(() -> {
@@ -214,32 +257,39 @@ final class Widgets {
             actions.add(() -> {
                 boolean now = library.toggleFollow(track.artist());
                 toast(context, now ? "Seguindo " + track.artist() : "Deixou de seguir");
-                if (onChanged != null) onChanged.run();
+                if (onChanged != null)
+                    onChanged.run();
             });
         }
         if (collectionKey != null && collectionKey.startsWith("playlist:")) {
             labels.add("Mover para cima");
             actions.add(() -> {
                 library.moveTrack(collectionKey, track.url, -1);
-                if (onChanged != null) onChanged.run();
+                if (onChanged != null)
+                    onChanged.run();
             });
             labels.add("Mover para baixo");
             actions.add(() -> {
                 library.moveTrack(collectionKey, track.url, 1);
-                if (onChanged != null) onChanged.run();
+                if (onChanged != null)
+                    onChanged.run();
             });
             labels.add("Remover da playlist");
             actions.add(() -> {
                 int index = 0;
                 List<LibraryStore.Track> items = library.tracks(collectionKey);
-                for (int i = 0; i < items.size(); i++) if (items.get(i).url.equals(track.url)) index = i;
+                for (int i = 0; i < items.size(); i++)
+                    if (items.get(i).url.equals(track.url))
+                        index = i;
                 library.remove(collectionKey, track.url);
-                if (onChanged != null) onChanged.run();
+                if (onChanged != null)
+                    onChanged.run();
                 toast(context, "Removida · desfazer em " + collectionName);
                 final int at = index;
                 final Runnable restore = () -> {
                     library.restoreTrack(collectionKey, track, at);
-                    if (onChanged != null) onChanged.run();
+                    if (onChanged != null)
+                        onChanged.run();
                 };
                 MainActivity.undo("Removida de " + collectionName, restore);
             });
@@ -307,7 +357,7 @@ final class Widgets {
     static View divider(Context context, int topDp) {
         View view = new View(context);
         GradientDrawable drawable = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{Ui.withAlpha(Ui.CYAN, 0x00), Ui.withAlpha(Ui.CYAN, 0x30), Ui.withAlpha(Ui.VIOLET, 0x00)});
+                new int[] { Ui.withAlpha(Ui.CYAN, 0x00), Ui.withAlpha(Ui.CYAN, 0x30), Ui.withAlpha(Ui.VIOLET, 0x00) });
         view.setBackground(drawable);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, Math.max(1, Ui.dp(context, 1)));
         params.topMargin = Ui.dp(context, topDp);
@@ -318,7 +368,8 @@ final class Widgets {
 
     static void setMargins(View view, int left, int top, int right, int bottom) {
         ViewGroup.LayoutParams params = view.getLayoutParams();
-        if (!(params instanceof LinearLayout.LayoutParams)) return;
+        if (!(params instanceof LinearLayout.LayoutParams))
+            return;
         LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) params;
         lp.setMargins(left, top, right, bottom);
         view.setLayoutParams(lp);

@@ -31,32 +31,37 @@ import java.util.Locale;
  */
 public final class Ui {
 
-    // ------------------------------------------------------------- palette
-    public static final int BG          = 0xFF07090D;  // abyss
-    public static final int S1          = 0xFF0E1117;  // card
-    public static final int S2          = 0xFF151922;  // raised / chips
-    public static final int S3          = 0xFF1D222C;  // highest
-    public static final int LINE        = 0x18FFFFFF;  // hairline
-    public static final int LINE_STRONG = 0x33FFFFFF;
+    // ------------------------------------------------------------- palette: Electric Audio Flow
+    public static final int BG          = 0xFF0E141C;  // surface base: #0e141c
+    public static final int S0          = 0xFF090F16;  // surface-container-lowest: #090f16
+    public static final int S1          = 0xFF161C24;  // surface-container-low: #161c24 (cards)
+    public static final int S2          = 0xFF1A2028;  // surface-container: #1a2028 (raised / chips)
+    public static final int S3          = 0xFF242A33;  // surface-container-high: #242a33
+    public static final int S4          = 0xFF2F353E;  // surface-container-highest: #2f353e
+    public static final int LINE        = 0x14FFFFFF;  // rgba(255,255,255,0.06) hairline
+    public static final int LINE_STRONG = 0x24FFFFFF;
 
-    public static final int TEXT        = 0xFFF4F6FA;
-    public static final int TEXT2       = 0xFF9AA5B8;
-    public static final int TEXT3       = 0xFF5F6A7C;
+    public static final int TEXT        = 0xFFDDE3EE;  // on-surface: #dde3ee
+    public static final int TEXT2       = 0xFFBBC9CF;  // on-surface-variant: #bbc9cf
+    public static final int TEXT3       = 0xFF859399;  // outline: #859399
 
-    public static final int CYAN        = 0xFF22E0FF;  // primary
-    public static final int CYAN_DEEP   = 0xFF0B7C8C;
-    public static final int VIOLET      = 0xFF8B6BFF;  // secondary
+    public static final int CYAN        = 0xFF00D2FF;  // primary-container: #00d2ff (electric cyan)
+    public static final int CYAN_LIGHT  = 0xFFA5E7FF;  // primary: #a5e7ff
+    public static final int CYAN_DEEP   = 0xFF00566A;  // on-primary-container
+    public static final int BLUE_ACCENT = 0xFF4E8EFF;  // secondary-container: #4e8eff (electric cobalt)
+    public static final int BLUE_SOFT   = 0xFFAEC6FF;  // secondary: #aec6ff
+    public static final int VIOLET      = 0xFF8B6BFF;  // accent
     public static final int VIOLET_SOFT = 0xFFC9BCFF;
     public static final int GREEN       = 0xFF38E0A0;  // offline / positive
     public static final int AMBER       = 0xFFF5B14C;  // downloading
     public static final int RED         = 0xFFFF7A7A;
-    public static final int GLASS       = 0xE60E1117;
+    public static final int GLASS       = 0xE60E141C;
 
     // Legacy aliases kept for existing call sites.
     public static final int RAISED = S2, PANEL = S2, PANEL_HIGH = S3, PANEL_HIGHER = S3,
-            PANEL_HIGHEST = S3, STROKE = LINE_STRONG, STROKE_SOFT = LINE, WHITE = TEXT,
+            PANEL_HIGHEST = S4, STROKE = LINE_STRONG, STROKE_SOFT = LINE, WHITE = TEXT,
             MUTED = TEXT2, MUTED_DIM = TEXT3, GREEN_DARK = CYAN_DEEP,
-            VIOLET_CONTAINER = VIOLET, VIOLET_LIGHT = VIOLET_SOFT,
+            VIOLET_CONTAINER = BLUE_ACCENT, VIOLET_LIGHT = BLUE_SOFT,
             OFFLINE = GREEN, DOWNLOADING = AMBER, DANGER = RED;
 
     public static final int WIDE_DP = 840;
@@ -328,6 +333,23 @@ public final class Ui {
         view.setPadding(dp(context, 7), dp(context, 3), dp(context, 7), dp(context, 3));
         view.setBackground(surface(context, withAlpha(color, 0x22), 6, false));
         return view;
+    }
+
+    /** High-fidelity audio badge: FLAC 24-bit, Lossless, Baixada */
+    public static TextView fidelityBadge(Context context, String label) {
+        int color = CYAN;
+        if ("Baixada".equalsIgnoreCase(label) || "Offline".equalsIgnoreCase(label)) color = GREEN;
+        else if (label != null && label.contains("FLAC")) color = CYAN;
+        else if (label != null && label.contains("Lossless")) color = BLUE_SOFT;
+        return badge(context, label, color);
+    }
+
+    /** 64dp Master play button background with Electric Cyan gradient and diffuse aura. */
+    public static GradientDrawable masterPlay(Context context) {
+        GradientDrawable drawable = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR, new int[]{CYAN, BLUE_ACCENT});
+        drawable.setShape(GradientDrawable.OVAL);
+        return drawable;
     }
 
     // ----------------------------------------------------------- media

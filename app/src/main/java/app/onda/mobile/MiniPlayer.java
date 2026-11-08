@@ -82,8 +82,8 @@ final class MiniPlayer {
         progressFill.setBackgroundColor(Ui.CYAN);
         progressTrack.addView(progressFill, new LinearLayout.LayoutParams(0, Ui.dp(context, 2), 0));
 
-        shell.addView(bar);
         shell.addView(progressTrack, new LinearLayout.LayoutParams(-1, Ui.dp(context, 2)));
+        shell.addView(bar);
         host.rootMiniHost().addView(shell, new LinearLayout.LayoutParams(-1, -2));
         update();
     }

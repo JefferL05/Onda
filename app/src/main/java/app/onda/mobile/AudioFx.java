@@ -1,33 +1,45 @@
 package app.onda.mobile;
 
+import android.media.audiofx.BassBoost;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.LoudnessEnhancer;
+import android.media.audiofx.Virtualizer;
 
 /**
- * Real audio processing on the playback session: a 5-band equalizer with
- * presets and an optional crossfade envelope.
+ * Real audio processing on the playback session: multi-band equalizer with
+ * calibrated presets, BassBoost, 3D Virtualizer, and an optional crossfade envelope.
  *
  * Everything degrades gracefully — some devices/emulators refuse to attach an
  * Equalizer, and the player must keep working. Nothing here is simulated: if
  * the effect cannot be created, the UI reports "indisponível" and stays honest.
  */
 final class AudioFx {
-    static final String[] PRESET_NAMES = {"Flat", "Graves", "Voz", "Rock", "Eletrônica", "Jazz"};
+    static final String[] PRESET_NAMES = {
+            "Personalizado", "Graves Profundos", "Eletrônica/Synth",
+            "Acústico & Voz", "Rock Dinâmico", "Flat / Neutro", "Espacial 3D"
+    };
+
     static final short[][] PRESETS = {
-            {0, 0, 0, 0, 0},
-            {600, 400, 0, -100, -200},
-            {-200, 200, 500, 300, 0},
-            {400, 200, -100, 300, 500},
-            {500, 200, 0, 200, 600},
-            {300, 100, 100, 200, 300},
+            {0, 0, 0, 0, 0},             // Personalizado
+            {600, 450, 50, -100, -200},  // Graves Profundos
+            {500, 300, -50, 250, 600},   // Eletrônica/Synth
+            {-200, 100, 500, 400, 100},  // Acústico & Voz
+            {450, 200, -100, 300, 550},  // Rock Dinâmico
+            {0, 0, 0, 0, 0},             // Flat / Neutro
+            {200, 100, 200, 400, 500},   // Espacial 3D
     };
 
     private Equalizer equalizer;
     private LoudnessEnhancer loudness;
+    private BassBoost bassBoost;
+    private Virtualizer virtualizer;
     private int session;
     private boolean available;
-    private int preset = -1;
+    private boolean enabled = true;
+    private int preset = 5; // Flat / Neutro
     private float boostDb = 0f;
+    private short bassStrength = 0;
+    private short virtualizerStrength = 0;
 
     boolean attach(int audioSession) {
         if (audioSession == 0 || audioSession == session) return available;
@@ -35,7 +47,7 @@ final class AudioFx {
         session = audioSession;
         try {
             equalizer = new Equalizer(0, audioSession);
-            equalizer.setEnabled(true);
+            equalizer.setEnabled(enabled);
             available = true;
             if (preset >= 0) applyPreset(preset);
         } catch (RuntimeException e) {
@@ -44,13 +56,33 @@ final class AudioFx {
         }
         try {
             loudness = new LoudnessEnhancer(audioSession);
-            loudness.setEnabled(true);
+            loudness.setEnabled(enabled);
             loudness.setTargetGain((int) Math.max(0, boostDb) * 100);
         } catch (RuntimeException ignored) { }
+        try {
+            bassBoost = new BassBoost(0, audioSession);
+            bassBoost.setEnabled(enabled && bassStrength > 0);
+            if (bassStrength > 0) bassBoost.setStrength(bassStrength);
+        } catch (RuntimeException ignored) { bassBoost = null; }
+        try {
+            virtualizer = new Virtualizer(0, audioSession);
+            virtualizer.setEnabled(enabled && virtualizerStrength > 0);
+            if (virtualizerStrength > 0) virtualizer.setStrength(virtualizerStrength);
+        } catch (RuntimeException ignored) { virtualizer = null; }
         return available;
     }
 
     boolean available() { return available; }
+
+    void setEnabled(boolean value) {
+        enabled = value;
+        try { if (equalizer != null) equalizer.setEnabled(value); } catch (RuntimeException ignored) { }
+        try { if (loudness != null) loudness.setEnabled(value); } catch (RuntimeException ignored) { }
+        try { if (bassBoost != null) bassBoost.setEnabled(value && bassStrength > 0); } catch (RuntimeException ignored) { }
+        try { if (virtualizer != null) virtualizer.setEnabled(value && virtualizerStrength > 0); } catch (RuntimeException ignored) { }
+    }
+
+    boolean isEnabled() { return enabled; }
 
     /** Number of bands the device actually exposes (usually 5), 0 when unavailable. */
     int bands() {
@@ -84,11 +116,21 @@ final class AudioFx {
         try {
             equalizer.setBandLevel((short) band, (short) Math.max(-1500, Math.min(levelRangeMillibel(), millibel)));
         } catch (RuntimeException ignored) { }
-        preset = -1;
+        preset = 0; // Personalizado
     }
 
     int bandLevel(int band) {
         try { return equalizer == null ? 0 : equalizer.getBandLevel((short) band); } catch (RuntimeException e) { return 0; }
+    }
+
+    int bandFreq(int band) {
+        if (equalizer != null) {
+            try {
+                return equalizer.getCenterFreq((short) band) / 1000;
+            } catch (RuntimeException ignored) { }
+        }
+        int[] fallback = {60, 230, 910, 3600, 14000};
+        return band < fallback.length ? fallback[band] : 1000;
     }
 
     int preset() { return preset; }
@@ -98,7 +140,7 @@ final class AudioFx {
         try {
             if (loudness == null && session != 0) loudness = new LoudnessEnhancer(session);
             if (loudness != null) {
-                loudness.setEnabled(true);
+                loudness.setEnabled(enabled);
                 loudness.setTargetGain((int) (boostDb * 100));
             }
         } catch (RuntimeException ignored) { }
@@ -106,11 +148,39 @@ final class AudioFx {
 
     float boost() { return boostDb; }
 
+    void setBassBoost(short strength) {
+        bassStrength = (short) Math.max(0, Math.min(1000, strength));
+        if (bassBoost != null) {
+            try {
+                bassBoost.setEnabled(enabled && bassStrength > 0);
+                bassBoost.setStrength(bassStrength);
+            } catch (RuntimeException ignored) { }
+        }
+    }
+
+    short getBassBoost() { return bassStrength; }
+
+    void setVirtualizer(short strength) {
+        virtualizerStrength = (short) Math.max(0, Math.min(1000, strength));
+        if (virtualizer != null) {
+            try {
+                virtualizer.setEnabled(enabled && virtualizerStrength > 0);
+                virtualizer.setStrength(virtualizerStrength);
+            } catch (RuntimeException ignored) { }
+        }
+    }
+
+    short getVirtualizer() { return virtualizerStrength; }
+
     void release() {
         try { if (equalizer != null) { equalizer.setEnabled(false); equalizer.release(); } } catch (RuntimeException ignored) { }
         try { if (loudness != null) { loudness.setEnabled(false); loudness.release(); } } catch (RuntimeException ignored) { }
+        try { if (bassBoost != null) { bassBoost.setEnabled(false); bassBoost.release(); } } catch (RuntimeException ignored) { }
+        try { if (virtualizer != null) { virtualizer.setEnabled(false); virtualizer.release(); } } catch (RuntimeException ignored) { }
         equalizer = null;
         loudness = null;
+        bassBoost = null;
+        virtualizer = null;
         session = 0;
         available = false;
     }

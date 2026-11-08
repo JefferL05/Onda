@@ -109,7 +109,10 @@ public final class OfflineService extends Service {
         wifiOnly = preferences.getBoolean("wifiOnly", false);
         dataSaver = preferences.getBoolean("dataSaver", false);
         crossfade = preferences.getBoolean("crossfade", false);
-        eqPreset = preferences.getInt("eqPreset", 0);
+        eqPreset = preferences.getInt("eqPreset", 5);
+        effects.setEnabled(preferences.getBoolean("effectsEnabled", true));
+        effects.setBassBoost((short) preferences.getInt("bassBoost", 0));
+        effects.setVirtualizer((short) preferences.getInt("virtualizer", 0));
         restoreDownloadQueue();
         // A queue persisted from a previous process resumes on its own.
         main.postDelayed(this::pumpDownloads, 2000);
@@ -225,6 +228,17 @@ public final class OfflineService extends Service {
         emit();
     }
     void equalizerBand(int band, int millibel) { effects.setBand(band, millibel); emit(); }
+    int equalizerBandLevel(int band) { return effects.bandLevel(band); }
+    int equalizerBandFreq(int band) { return effects.bandFreq(band); }
+    int equalizerBands() { return effects.bands(); }
+    int[] equalizerBandRange(int band) { return effects.bandRange(band); }
+    int equalizerRangeMillibel() { return effects.levelRangeMillibel(); }
+    boolean effectsEnabled() { return effects.isEnabled(); }
+    void setEffectsEnabled(boolean enabled) { effects.setEnabled(enabled); preferences.edit().putBoolean("effectsEnabled", enabled).apply(); emit(); }
+    int bassBoost() { return effects.getBassBoost(); }
+    void bassBoost(int strength) { effects.setBassBoost((short) strength); preferences.edit().putInt("bassBoost", strength).apply(); emit(); }
+    int virtualizer() { return effects.getVirtualizer(); }
+    void virtualizer(int strength) { effects.setVirtualizer((short) strength); preferences.edit().putInt("virtualizer", strength).apply(); emit(); }
     void volume(int percent) { audio.setStreamVolume(AudioManager.STREAM_MUSIC,
             Math.round(Math.max(0,Math.min(100,percent)) * audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) / 100f), 0); }
     int volume() { int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC); return max == 0 ? 0 : audio.getStreamVolume(AudioManager.STREAM_MUSIC) * 100 / max; }
