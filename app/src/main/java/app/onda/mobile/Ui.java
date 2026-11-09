@@ -123,10 +123,14 @@ public final class Ui {
         states.addState(new int[]{android.R.attr.state_focused}, surface(context, color, radius, true));
         states.addState(new int[]{android.R.attr.state_selected}, surface(context, color, radius, true));
         states.addState(new int[]{android.R.attr.state_pressed}, surface(context, blend(color, CYAN, 0.10f), radius, false));
-        states.addState(new int[]{-android.R.attr.state_enabled}, surface(context, S1, radius, false));
+        states.addState(new int[]{-android.R.attr.state_enabled}, surface(context, withAlpha(color, 0x60), radius, false));
         states.addState(new int[]{}, surface(context, color, radius, false));
-        view.setBackground(new RippleDrawable(ColorStateList.valueOf(withAlpha(CYAN, 0x38)), states,
-                surface(context, TEXT, radius, false)));
+
+        GradientDrawable mask = new GradientDrawable();
+        mask.setColor(Color.WHITE);
+        mask.setCornerRadius(dp(context, radius));
+
+        view.setBackground(new RippleDrawable(ColorStateList.valueOf(withAlpha(CYAN, 0x38)), states, mask));
         view.setFocusable(true);
         view.setSoundEffectsEnabled(true);
     }
@@ -250,12 +254,58 @@ public final class Ui {
         button.setAllCaps(false);
         button.setTextSize(15);
         button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        button.setTextColor(BG);
+        ColorStateList textColors = new ColorStateList(
+                new int[][]{new int[]{-android.R.attr.state_enabled}, new int[]{}},
+                new int[]{withAlpha(BG, 0x60), BG});
+        button.setTextColor(textColors);
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(withAlpha(0xFFFFFFFF, 0x40)),
                 aurora(context, 999), aurora(context, 999)));
         button.setMinHeight(dp(context, 52));
         button.setPadding(dp(context, 22), 0, dp(context, 22), 0);
         button.setGravity(Gravity.CENTER);
+        return button;
+    }
+
+    /**
+     * Ergonomic Action button with vector glyph and text.
+     * Guarantees 8dp spacing, vertical centering, single line with ellipsize,
+     * minimum touch target of 48dp+ (or 52dp for primary) and ripple feedback.
+     */
+    public static LinearLayout actionButton(Context context, String glyphData, String text, boolean primary) {
+        LinearLayout button = row(context);
+        button.setGravity(Gravity.CENTER);
+        button.setFocusable(true);
+        button.setClickable(true);
+        int fgColor = primary ? BG : CYAN;
+        int heightDp = primary ? 52 : TOUCH;
+        button.setMinimumHeight(dp(context, heightDp));
+
+        if (primary) {
+            button.setBackground(new RippleDrawable(ColorStateList.valueOf(withAlpha(0xFFFFFFFF, 0x40)),
+                    aurora(context, 999), aurora(context, 999)));
+            button.setPadding(dp(context, 20), 0, dp(context, 20), 0);
+        } else {
+            interactive(button, S2, 16);
+            button.setPadding(dp(context, 16), 0, dp(context, 16), 0);
+        }
+
+        if (glyphData != null && !glyphData.isEmpty()) {
+            ImageView icon = Glyph.view(context, glyphData, 18, fgColor);
+            button.addView(icon);
+        }
+
+        TextView label = new TextView(context);
+        label.setText(text);
+        label.setTextSize(primary ? 15 : 13);
+        label.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        label.setTextColor(fgColor);
+        label.setSingleLine(true);
+        label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        if (glyphData != null && !glyphData.isEmpty()) {
+            label.setPadding(dp(context, 8), 0, 0, 0);
+        }
+        button.addView(label);
+        button.setContentDescription(text);
         return button;
     }
 
@@ -286,7 +336,10 @@ public final class Ui {
         button.setAllCaps(false);
         button.setTextSize(13);
         button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        button.setTextColor(CYAN);
+        ColorStateList textColors = new ColorStateList(
+                new int[][]{new int[]{-android.R.attr.state_enabled}, new int[]{}},
+                new int[]{withAlpha(CYAN, 0x60), CYAN});
+        button.setTextColor(textColors);
         interactive(button, S2, 16);
         button.setMinHeight(dp(context, TOUCH));
         button.setPadding(dp(context, 12), dp(context, 6), dp(context, 12), dp(context, 6));

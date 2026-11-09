@@ -52,12 +52,12 @@ final class MiniPlayer {
         bar.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
         likeIcon = Widgets.iconButton(context, Glyph.HEART, Ui.TEXT3, 18);
         likeIcon.setContentDescription("Curtir");
-        likeIcon.setOnClickListener(v -> {
+        likeIcon.setOnClickListener(Widgets.debounced(v -> {
             LibraryStore.Track track = LibraryStore.shared(context).find(player.state().url);
             if (track == null) return;
             LibraryStore.shared(context).toggleLike(track);
             update();
-        });
+        }));
         bar.addView(likeIcon, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
         playIcon = Glyph.view(context, Glyph.PLAY, 22, Ui.BG);
         LinearLayout playButton = Ui.column(context);
@@ -66,11 +66,11 @@ final class MiniPlayer {
         playButton.addView(playIcon);
         Ui.ripple(playButton, 999);
         playButton.setContentDescription("Ouvir ou pausar");
-        playButton.setOnClickListener(v -> player.toggle());
+        playButton.setOnClickListener(Widgets.debounced(v -> player.toggle()));
         bar.addView(playButton, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
         nextIcon = Widgets.iconButton(context, Glyph.NEXT, Ui.TEXT2, 20);
         nextIcon.setContentDescription("Próxima música");
-        nextIcon.setOnClickListener(v -> player.next());
+        nextIcon.setOnClickListener(Widgets.debounced(v -> player.next()));
         bar.addView(nextIcon, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
         bar.setOnClickListener(v -> expand.run());
         bar.setContentDescription("Abrir o player");
@@ -105,13 +105,19 @@ final class MiniPlayer {
         shell.setVisibility(state.hasTrack ? View.VISIBLE : View.GONE);
         if (!state.hasTrack) return;
         if (!state.title.equals(title.getText().toString())) title.setText(state.title);
-        String detail = state.artist.isEmpty() ? state.status : state.artist;
+        String detail;
+        if (state.loading || state.buffering) {
+            detail = "Carregando áudio…";
+        } else {
+            detail = state.artist.isEmpty() ? state.status : state.artist;
+        }
         subtitle.setText(detail);
         cover.setTag(null);
         CoverCache.with(host).load(cover, state.cover);
         playIcon.setImageDrawable(Glyph.drawable(
                 state.playing || (state.loading && state.playing) ? Glyph.PAUSE : Glyph.PLAY, Ui.BG, true));
         likeIcon.setImageDrawable(Glyph.drawable(Glyph.HEART, state.liked ? Ui.CYAN : Ui.TEXT3));
+        likeIcon.setContentDescription(state.liked ? "Música curtida" : "Curtir");
         updatePosition();
     }
 

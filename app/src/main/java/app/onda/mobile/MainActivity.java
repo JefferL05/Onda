@@ -334,10 +334,16 @@ public final class MainActivity extends Activity implements PlayerController.Lis
         if (incoming.getParent() instanceof ViewGroup) ((ViewGroup) incoming.getParent()).removeView(incoming);
         content.removeAllViews();
         content.addView(screen.view(), new FrameLayout.LayoutParams(-1, -1));
-        screen.view().setAlpha(0f);
-        screen.view().animate().alpha(1f).translationY(0).setDuration(180).start();
-        pushed = screen;
         boolean immersive = screen instanceof Screens.NowPlaying;
+        if (immersive) {
+            screen.view().setTranslationY(Ui.dp(this, 160));
+            screen.view().setAlpha(0f);
+            screen.view().animate().alpha(1f).translationY(0).setDuration(240)
+                    .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+        } else {
+            screen.view().setAlpha(0f);
+            screen.view().animate().alpha(1f).translationY(0).setDuration(180).start();
+        }
         if (navBar != null) navBar.setVisibility(immersive ? View.GONE : View.VISIBLE);
         if (mini != null) mini.setVisible(!immersive && !(screen instanceof Screens.Queue));
         refreshSelection();
@@ -369,9 +375,13 @@ public final class MainActivity extends Activity implements PlayerController.Lis
         browserTitle.setMaxLines(1);
         browserTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
         bar.addView(browserTitle, new LinearLayout.LayoutParams(0, -2, 1));
+        ImageView playBg = Widgets.iconButton(this, Glyph.PLAY, Ui.CYAN, 20);
+        playBg.setContentDescription("Ouvir com tela apagada");
+        playBg.setOnClickListener(Widgets.debounced(v -> playCurrentVideoInBackground()));
+        bar.addView(playBg, new LinearLayout.LayoutParams(Ui.dp(this, 48), Ui.dp(this, 48)));
         ImageView save = Widgets.iconButton(this, Glyph.PLUS, Ui.CYAN, 20);
         save.setContentDescription("Salvar vídeo atual");
-        save.setOnClickListener(v -> saveCurrentVideo());
+        save.setOnClickListener(Widgets.debounced(v -> saveCurrentVideo()));
         bar.addView(save, new LinearLayout.LayoutParams(Ui.dp(this, 48), Ui.dp(this, 48)));
         ImageView close = Widgets.iconButton(this, Glyph.CLOSE, Ui.TEXT2, 20);
         close.setContentDescription("Fechar navegador");
@@ -507,6 +517,22 @@ public final class MainActivity extends Activity implements PlayerController.Lis
         LibraryDialogs.save(this, new LibraryStore.Track(title, url), () -> { });
     }
 
+    private void playCurrentVideoInBackground() {
+        if (web == null) return;
+        String raw = web.getUrl();
+        String url = raw == null ? null : UrlPolicy.canonicalVideo(raw);
+        if (url == null) {
+            Widgets.toast(this, "Abra um vídeo no YouTube para ouvir com a tela apagada.");
+            return;
+        }
+        web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(function(m){m.pause();});", null);
+        String rawTitle = web.getTitle() == null ? "Vídeo do YouTube" : web.getTitle().replaceFirst(" - YouTube$", "").trim();
+        LibraryStore.Track track = new LibraryStore.Track(rawTitle, url);
+        player.playNow(track);
+        Widgets.toast(this, "Reproduzindo com tela apagada…");
+        openNowPlaying();
+    }
+
     // ------------------------------------------------------------- undo
     static void undo(String message, Runnable restore) {
         if (current != null) current.showUndo(message, restore);
@@ -548,6 +574,12 @@ public final class MainActivity extends Activity implements PlayerController.Lis
     @Override public void onPlayerChanged() {
         if (mini != null) mini.update();
         if (nowPlayingScreen != null && nowPlayingScreen.view().getParent() != null) nowPlayingScreen.refresh();
+        if (pushed != null && pushed != nowPlayingScreen && pushed.view().getParent() != null) {
+            pushed.refresh();
+        } else if (pushed == null) {
+            if (tab == TAB_HOME && homeScreen != null) homeScreen.refresh();
+            else if (tab == TAB_LIBRARY && libraryScreen != null) libraryScreen.refresh();
+        }
     }
 
     @Override public void onPosition() {

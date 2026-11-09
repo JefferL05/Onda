@@ -22,6 +22,39 @@ import java.util.List;
  */
 final class Widgets {
 
+    // ------------------------------------------------------------- debounce
+    private static long lastGlobalClick = 0;
+    private static final long DEBOUNCE_DELAY_MS = 450;
+
+    public static boolean canClick() {
+        return canClick(DEBOUNCE_DELAY_MS);
+    }
+
+    public static boolean canClick(long delayMs) {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - lastGlobalClick < delayMs) {
+            return false;
+        }
+        lastGlobalClick = now;
+        return true;
+    }
+
+    public static View.OnClickListener debounced(View.OnClickListener listener) {
+        return debounced(DEBOUNCE_DELAY_MS, listener);
+    }
+
+    public static View.OnClickListener debounced(long delayMs, View.OnClickListener listener) {
+        return v -> {
+            if (canClick(delayMs) && listener != null) {
+                listener.onClick(v);
+            }
+        };
+    }
+
+    public static void setDebouncedClick(View view, View.OnClickListener listener) {
+        view.setOnClickListener(debounced(listener));
+    }
+
     interface TrackAction {
         /** Play, open, or navigate — whatever the row's primary intent is. */
         void onPrimary(LibraryStore.Track track, View row);
@@ -68,19 +101,36 @@ final class Widgets {
         words.addView(subtitle);
         row.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
 
+        ImageView likeBtn = iconButton(context, Glyph.HEART, LibraryStore.shared(context).liked(track.url) ? Ui.CYAN : Ui.TEXT3, 20);
+        likeBtn.setContentDescription(LibraryStore.shared(context).liked(track.url) ? "Descurtir " + track.title : "Curtir " + track.title);
+        likeBtn.setFocusable(false);
+        likeBtn.setClickable(true);
+        likeBtn.setOnClickListener(v -> {
+            LibraryStore.shared(context).toggleLike(track);
+            boolean isLiked = LibraryStore.shared(context).liked(track.url);
+            likeBtn.setImageDrawable(Glyph.drawable(Glyph.HEART, isLiked ? Ui.CYAN : Ui.TEXT3));
+            likeBtn.setContentDescription(isLiked ? "Descurtir " + track.title : "Curtir " + track.title);
+            toast(context, isLiked ? "Música curtida" : "Removida dos favoritos");
+        });
+        row.addView(likeBtn, new LinearLayout.LayoutParams(Ui.dp(context, 40), Ui.dp(context, 48)));
+
         ImageView more = iconButton(context, Glyph.MORE, Ui.TEXT3, 36);
         more.setContentDescription("Opções de " + track.title);
+        more.setFocusable(false);
+        more.setClickable(true);
         more.setOnClickListener(v -> action.onMore(track, row));
         row.addView(more, new LinearLayout.LayoutParams(Ui.dp(context, 40), Ui.dp(context, 48)));
 
         row.setContentDescription("Reproduzir " + track.title + (detail.isEmpty() ? "" : ", " + detail));
         Ui.ripple(row, 16);
-        row.setOnClickListener(v -> action.onPrimary(track, row));
+        row.setFocusable(true);
+        row.setClickable(true);
+        row.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        row.setOnClickListener(debounced(v -> action.onPrimary(track, row)));
         row.setOnLongClickListener(v -> {
             action.onLongPress(track, row);
             return true;
         });
-        row.setFocusable(true);
         return row;
     }
 
@@ -109,7 +159,10 @@ final class Widgets {
         words.addView(subtitle);
         row.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
         Ui.ripple(row, 12);
-        row.setOnClickListener(v -> action.onPrimary(track, row));
+        row.setFocusable(true);
+        row.setClickable(true);
+        row.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        row.setOnClickListener(debounced(v -> action.onPrimary(track, row)));
         row.setOnLongClickListener(v -> {
             action.onLongPress(track, row);
             return true;

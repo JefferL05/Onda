@@ -109,7 +109,7 @@ final class Screens {
             scroll.setClipToPadding(false);
             scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
             LinearLayout body = Ui.column(context);
-            body.setPadding(0, 0, 0, Ui.dp(context, 24));
+            body.setPadding(0, 0, 0, Ui.dp(context, 140));
             scroll.addView(body);
             column.addView(header, new LinearLayout.LayoutParams(-1, -2));
             column.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -537,7 +537,9 @@ final class Screens {
         }
 
         private void buildPlaylists(LinearLayout body) {
-            section(body, "Suas playlists", "+ Nova", () -> host.openPlaylistEditor(null, null));
+            section(body, "Suas playlists", "+ Nova", () -> {
+                if (Widgets.canClick()) host.openPlaylistEditor(null, null);
+            });
             List<String> names = library.playlists();
             names.sort((a, b) -> Boolean.compare(library.playlist(b).favorite, library.playlist(a).favorite));
             if (names.isEmpty()) {
@@ -818,7 +820,7 @@ final class Screens {
             generation++;
             LinearLayout header = header("Buscar", null, false, null, null);
             LinearLayout body = page(header);
-            body.setPadding(0, 0, 0, Ui.dp(context, 24));
+            body.setPadding(0, 0, 0, Ui.dp(context, 140));
             LinearLayout searchRow = Ui.row(context);
             searchRow.setPadding(Ui.dp(context, 20), 0, Ui.dp(context, 20), Ui.dp(context, 8));
             LinearLayout field = Ui.row(context);
@@ -1195,10 +1197,10 @@ final class Screens {
 
             android.widget.Button btnLib = Ui.chip(context, "Biblioteca", true);
             android.widget.Button btnQueue = Ui.chip(context, "Fila Ativa", false);
-            btnQueue.setOnClickListener(v -> host.openQueue());
+            btnQueue.setOnClickListener(Widgets.debounced(v -> host.openQueue()));
 
-            switcher.addView(btnLib, new LinearLayout.LayoutParams(0, Ui.dp(context, 38), 1));
-            switcher.addView(btnQueue, new LinearLayout.LayoutParams(0, Ui.dp(context, 38), 1));
+            switcher.addView(btnLib, new LinearLayout.LayoutParams(0, Ui.dp(context, 42), 1));
+            switcher.addView(btnQueue, new LinearLayout.LayoutParams(0, Ui.dp(context, 42), 1));
 
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
             params.setMargins(Ui.dp(context, 20), 0, Ui.dp(context, 20), Ui.dp(context, 10));
@@ -1217,13 +1219,13 @@ final class Screens {
             LinearLayout actions = Ui.row(context);
             actions.setPadding(0, Ui.dp(context, 12), 0, 0);
             android.widget.Button open = Ui.ghost(context, "Ver baixadas");
-            open.setOnClickListener(v -> {
+            open.setOnClickListener(Widgets.debounced(v -> {
                 filter = "Baixadas";
                 builtAt = -1;
                 refresh();
-            });
+            }));
             android.widget.Button queue = Ui.ghost(context, "Fila");
-            queue.setOnClickListener(v -> host.openQueue());
+            queue.setOnClickListener(Widgets.debounced(v -> host.openQueue()));
             actions.addView(open, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
             actions.addView(queue, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
             card.addView(actions);
@@ -1264,7 +1266,9 @@ final class Screens {
             }
         }
         private void buildPlaylists(LinearLayout body) {
-            section(body, "Playlists", "+ Nova", () -> host.openPlaylistEditor(null, null));
+            section(body, "Playlists", "+ Nova", () -> {
+                if (Widgets.canClick()) host.openPlaylistEditor(null, null);
+            });
             List<String> names = library.playlists();
             if (names.isEmpty()) {
                 TextView empty = Ui.body(context, "Ainda sem playlists. Toque em Nova e comece a juntar músicas.");
@@ -1395,6 +1399,7 @@ final class Screens {
         private final String coverUrl;
         private final LinearLayout list;
         private final TextView count;
+        private LinearLayout downloadButtonHost;
         private ImageView heroArt;
         private String sortMode = "manual";
         private String filterText = "";
@@ -1471,24 +1476,25 @@ final class Screens {
             }
             LinearLayout actions = Ui.row(context);
             actions.setPadding(Ui.dp(context, 20), Ui.dp(context, 8), Ui.dp(context, 20), Ui.dp(context, 4));
-            android.widget.Button play = Ui.primary(context, "▶ Reproduzir");
-            play.setTextSize(14);
-            play.setOnClickListener(v -> {
+            LinearLayout play = Ui.actionButton(context, Glyph.PLAY, "Reproduzir", true);
+            play.setOnClickListener(Widgets.debounced(v -> {
                 List<LibraryStore.Track> current = items();
                 if (current.isEmpty()) {
                     Widgets.toast(context, "Esta lista ainda está vazia.");
                     return;
                 }
                 player.playCollection(current, title, key, current.get(0), false);
-            });
-            android.widget.Button shuffle = Ui.ghost(context, "⇄ Embaralhar");
-            shuffle.setOnClickListener(v -> {
+            }));
+            LinearLayout shuffle = Ui.actionButton(context, Glyph.SHUFFLE, "Embaralhar", false);
+            shuffle.setOnClickListener(Widgets.debounced(v -> {
                 List<LibraryStore.Track> current = items();
                 if (current.isEmpty()) return;
                 player.playCollection(current, title, key, current.get((int) (Math.random() * current.size())), true);
-            });
-            actions.addView(play, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
-            actions.addView(shuffle, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
+            }));
+            LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(0, Ui.dp(context, 52), 1);
+            playParams.rightMargin = Ui.dp(context, 8);
+            actions.addView(play, playParams);
+            actions.addView(shuffle, new LinearLayout.LayoutParams(0, Ui.dp(context, 52), 1));
             body.addView(actions);
             LinearLayout tools = Ui.row(context);
             tools.setPadding(Ui.dp(context, 20), Ui.dp(context, 4), Ui.dp(context, 20), Ui.dp(context, 4));
@@ -1530,25 +1536,15 @@ final class Screens {
             body.addView(tools);
             if (isPlaylist()) {
                 android.widget.Button save = Ui.ghost(context, "Editar playlist");
-                save.setOnClickListener(v -> host.openPlaylistEditor(title, null));
+                save.setOnClickListener(Widgets.debounced(v -> host.openPlaylistEditor(title, null)));
                 LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, Ui.dp(context, 44));
                 params.setMargins(Ui.dp(context, 20), Ui.dp(context, 4), Ui.dp(context, 20), 0);
                 body.addView(save, params);
             }
             if (!isDownloads()) {
-                android.widget.Button download = Ui.ghost(context, "↓ Baixar esta lista");
-                download.setOnClickListener(v -> {
-                    List<LibraryStore.Track> current = items();
-                    if (current.isEmpty()) {
-                        Widgets.toast(context, "Nada para baixar.");
-                        return;
-                    }
-                    for (LibraryStore.Track track : current) player.download(track);
-                    Widgets.toast(context, current.size() + " na fila de downloads");
-                });
-                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, Ui.dp(context, 44));
-                params.setMargins(Ui.dp(context, 20), 0, Ui.dp(context, 20), 0);
-                body.addView(download, params);
+                downloadButtonHost = Ui.column(context);
+                body.addView(downloadButtonHost, new LinearLayout.LayoutParams(-1, -2));
+                updateDownloadButton();
             }
             count.setTextColor(Ui.TEXT2);
             count.setTextSize(12);
@@ -1631,9 +1627,52 @@ final class Screens {
         @Override void refresh() {
             render();
         }
+        private void updateDownloadButton() {
+            if (downloadButtonHost == null) return;
+            downloadButtonHost.removeAllViews();
+            List<LibraryStore.Track> current = items();
+            if (current.isEmpty()) return;
+            OfflineStore store = new OfflineStore(context);
+            int downloaded = 0;
+            for (LibraryStore.Track t : current) {
+                if (store.has(t.url)) downloaded++;
+            }
+            PlayerController.State state = player.state();
+            int inQueue = 0;
+            for (DownloadQueue.Job job : state.jobs) {
+                if (job.state == DownloadQueue.State.ACTIVE || job.state == DownloadQueue.State.WAITING) {
+                    for (LibraryStore.Track t : current) {
+                        if (job.url.equals(t.url)) { inQueue++; break; }
+                    }
+                }
+            }
+
+            LinearLayout downloadBtn;
+            final int remaining = current.size() - downloaded;
+            if (downloaded == current.size()) {
+                downloadBtn = Ui.actionButton(context, Glyph.CHECK, "Lista baixada (" + downloaded + "/" + current.size() + ")", false);
+                downloadBtn.setAlpha(0.85f);
+            } else if (inQueue > 0) {
+                downloadBtn = Ui.actionButton(context, Glyph.DOWNLOAD, "Baixando (" + inQueue + " na fila)…", false);
+            } else {
+                downloadBtn = Ui.actionButton(context, Glyph.DOWNLOAD, "Baixar esta lista (" + remaining + " restantes)", false);
+                downloadBtn.setOnClickListener(Widgets.debounced(v -> {
+                    for (LibraryStore.Track track : current) {
+                        if (!store.has(track.url)) player.download(track);
+                    }
+                    Widgets.toast(context, remaining + " adicionadas à fila de downloads");
+                    updateDownloadButton();
+                }));
+            }
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, Ui.dp(context, 48));
+            params.setMargins(Ui.dp(context, 20), Ui.dp(context, 4), Ui.dp(context, 20), Ui.dp(context, 4));
+            downloadButtonHost.addView(downloadBtn, params);
+        }
+
         private void render() {
             if (list == null) return;
             list.removeAllViews();
+            updateDownloadButton();
             List<LibraryStore.Track> items = items();
             if (heroArt != null) CoverCache.with(context).load(heroArt, resolveCover());
             count.setText(filterText.isEmpty() ? Ui.songs(items.size()) : items.size() + " de " + library.tracks(key).size());
@@ -1646,22 +1685,24 @@ final class Screens {
             }
             int limit = Math.min(shown, items.size());
             LibraryStore.Track active = library.find(player.state().url);
-            for (int i = 0;
-            i < limit;
-            i++) {
+            OfflineStore offStore = new OfflineStore(context);
+            for (int i = 0; i < limit; i++) {
                 LibraryStore.Track track = items.get(i);
                 boolean current = active != null && active.url.equals(track.url);
-                Widgets.addTrackRow(list, context, track, track.artist(), current ? "Tocando" : null, Ui.CYAN,
+                boolean isDownloaded = offStore.has(track.url);
+                String badgeText = current ? "Tocando" : (isDownloaded ? "Baixada" : null);
+                int badgeColor = current ? Ui.CYAN : Ui.GREEN;
+                Widgets.addTrackRow(list, context, track, track.artist(), badgeText, badgeColor,
                         current, trackAction(isDownloads() ? "downloads" : key, title, this::render));
                 LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) list.getChildAt(list.getChildCount() - 1).getLayoutParams();
                 params.setMargins(Ui.dp(context, 20), 0, Ui.dp(context, 20), Ui.dp(context, 4));
             }
             if (limit < items.size()) {
                 android.widget.Button more = Ui.ghost(context, "Mostrar mais (" + (items.size() - limit) + ")");
-                more.setOnClickListener(v -> {
+                more.setOnClickListener(Widgets.debounced(v -> {
                     shown += 100;
                     render();
-                });
+                }));
                 LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, Ui.dp(context, 44));
                 params.setMargins(Ui.dp(context, 20), Ui.dp(context, 8), Ui.dp(context, 20), 0);
                 list.addView(more, params);
@@ -1701,31 +1742,35 @@ final class Screens {
             body.addView(hero);
             LinearLayout actions = Ui.row(context);
             actions.setPadding(Ui.dp(context, 20), Ui.dp(context, 8), Ui.dp(context, 20), Ui.dp(context, 8));
-            android.widget.Button play = Ui.primary(context, "▶ Reproduzir");
-            play.setOnClickListener(v -> {
+            LinearLayout play = Ui.actionButton(context, Glyph.PLAY, "Reproduzir", true);
+            play.setOnClickListener(Widgets.debounced(v -> {
                 List<LibraryStore.Track> current = library.artistTracks(name);
                 if (current.isEmpty()) {
                     Widgets.toast(context, "Nada deste artista salvo ainda.");
                     return;
                 }
                 player.playCollection(current, name, "artist:" + name, current.get(0), false);
-            });
+            }));
             android.widget.Button follow = Ui.ghost(context, library.following(name) ? "✓ Seguindo" : "+ Seguir");
-            follow.setOnClickListener(v -> {
+            follow.setOnClickListener(Widgets.debounced(v -> {
                 boolean now = library.toggleFollow(name);
                 follow.setText(now ? "✓ Seguindo" : "+ Seguir");
                 Widgets.toast(context, now ? "Seguindo " + name : "Deixou de seguir");
-            });
+            }));
             android.widget.Button radio = Ui.ghost(context, "Rádio");
-            radio.setOnClickListener(v -> startRadio());
-            actions.addView(play, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
-            actions.addView(follow, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
-            actions.addView(radio, new LinearLayout.LayoutParams(Ui.dp(context, 76), Ui.dp(context, 48)));
+            radio.setOnClickListener(Widgets.debounced(v -> startRadio()));
+            actions.addView(play, new LinearLayout.LayoutParams(0, Ui.dp(context, 50), 1));
+            LinearLayout.LayoutParams followP = new LinearLayout.LayoutParams(0, Ui.dp(context, 50), 1);
+            followP.leftMargin = Ui.dp(context, 8);
+            actions.addView(follow, followP);
+            LinearLayout.LayoutParams radioP = new LinearLayout.LayoutParams(Ui.dp(context, 76), Ui.dp(context, 50));
+            radioP.leftMargin = Ui.dp(context, 8);
+            actions.addView(radio, radioP);
             body.addView(actions);
             body.addView(Ui.section(context, "No aparelho"));
             body.addView(list);
             android.widget.Button more = Ui.ghost(context, "Ver mais deste artista no YouTube");
-            more.setOnClickListener(v -> host.openSearchWith(name));
+            more.setOnClickListener(Widgets.debounced(v -> host.openSearchWith(name)));
             pad(body, more);
         }
         private void startRadio() {
@@ -1786,24 +1831,33 @@ final class Screens {
             android.widget.Button radio = Ui.chip(context,
                     state.autoplay ? "Rádio automática ✓" : "Rádio automática",
                     state.autoplay);
-            radio.setOnClickListener(v -> {
+            radio.setOnClickListener(Widgets.debounced(v -> {
                 player.autoplay(!player.state().autoplay);
                 refresh();
-            });
+            }));
             android.widget.Button shuffle = Ui.chip(context, state.shuffled ? "Aleatório ✓" : "Aleatório", state.shuffled);
-            shuffle.setOnClickListener(v -> {
+            shuffle.setOnClickListener(Widgets.debounced(v -> {
                 player.toggleShuffle();
                 refresh();
-            });
-            toggleRow.addView(radio, new LinearLayout.LayoutParams(0, Ui.dp(context, 38), 1));
-            toggleRow.addView(shuffle, new LinearLayout.LayoutParams(0, Ui.dp(context, 38), 1));
+            }));
+            LinearLayout.LayoutParams radioParams = new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1);
+            radioParams.rightMargin = Ui.dp(context, 8);
+            toggleRow.addView(radio, radioParams);
+            toggleRow.addView(shuffle, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
             body.addView(toggleRow);
             body.addView(list);
             android.widget.Button clear = Ui.ghost(context, "Limpar fila");
-            clear.setOnClickListener(v -> new AlertDialog.Builder(context).setTitle("Limpar a fila?").setMessage("Playlists e favoritas são mantidas.").setPositiveButton("Limpar", (d, w) -> {
-                        library.replaceQueue(new ArrayList<>());
-                        refresh();
-                    }).setNegativeButton("Cancelar", null).show());
+            clear.setOnClickListener(Widgets.debounced(v -> {
+                new AlertDialog.Builder(context)
+                        .setTitle("Limpar a fila?")
+                        .setMessage("Playlists e favoritas são mantidas.")
+                        .setPositiveButton("Limpar", (d, w) -> {
+                            library.replaceQueue(new ArrayList<>());
+                            refresh();
+                        })
+                        .setNegativeButton("Cancelar", null)
+                        .show();
+            }));
             pad(body, clear);
         }
         @Override void refresh() {
@@ -1978,13 +2032,13 @@ final class Screens {
             controls.setPadding(0, Ui.dp(context, 14), 0, 0);
             shuffleIcon = Widgets.iconButton(context, Glyph.SHUFFLE, Ui.TEXT3, 22);
             shuffleIcon.setContentDescription("Aleatório");
-            shuffleIcon.setOnClickListener(v -> {
+            shuffleIcon.setOnClickListener(Widgets.debounced(v -> {
                 player.toggleShuffle();
                 refresh();
-            });
+            }));
             ImageView previous = Widgets.iconButton(context, Glyph.PREV, Ui.TEXT, 26);
             previous.setContentDescription("Anterior");
-            previous.setOnClickListener(v -> player.previous());
+            previous.setOnClickListener(Widgets.debounced(v -> player.previous()));
             playIcon = Glyph.view(context, Glyph.PLAY, 30, Ui.BG);
             LinearLayout playButton = Ui.column(context);
             playButton.setGravity(Gravity.CENTER);
@@ -1993,17 +2047,17 @@ final class Screens {
             LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(Ui.dp(context, 64), Ui.dp(context, 64));
             playParams.setMargins(Ui.dp(context, 18), 0, Ui.dp(context, 18), 0);
             Ui.ripple(playButton, 999);
-            playButton.setOnClickListener(v -> player.toggle());
+            playButton.setOnClickListener(Widgets.debounced(v -> player.toggle()));
             playButton.setContentDescription("Ouvir ou pausar");
             ImageView next = Widgets.iconButton(context, Glyph.NEXT, Ui.TEXT, 26);
             next.setContentDescription("Próxima");
-            next.setOnClickListener(v -> player.next());
+            next.setOnClickListener(Widgets.debounced(v -> player.next()));
             repeatIcon = Widgets.iconButton(context, Glyph.REPEAT, Ui.TEXT3, 22);
             repeatIcon.setContentDescription("Repetição");
-            repeatIcon.setOnClickListener(v -> {
+            repeatIcon.setOnClickListener(Widgets.debounced(v -> {
                 player.cycleRepeat();
                 refresh();
-            });
+            }));
             controls.addView(shuffleIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
             controls.addView(previous, new LinearLayout.LayoutParams(Ui.dp(context, 56), Ui.dp(context, 56)));
             controls.addView(playButton, playParams);
@@ -2097,19 +2151,35 @@ final class Screens {
                 title.setText("Seu player");
                 artist.setText("Escolha uma música para começar");
             }
-            badge.setText(state.device ? "FLAC 24-bit • Lossless" : state.offline ? "Baixada • Lossless" : "Lossless FLAC • 320k");
-            badge.setTextColor(Ui.CYAN);
-            badge.setBackground(Ui.surface(context, Ui.withAlpha(Ui.CYAN, 0x22), 6, false));
-            playIcon.setImageDrawable(Glyph.drawable(state.playing ? Glyph.PAUSE : Glyph.PLAY, Ui.BG, true));
+            if (state.loading || state.buffering) {
+                badge.setText("Carregando…");
+                badge.setTextColor(Ui.AMBER);
+                badge.setBackground(Ui.surface(context, Ui.withAlpha(Ui.AMBER, 0x22), 6, false));
+            } else {
+                badge.setText(state.device ? "FLAC 24-bit • Lossless" : state.offline ? "Baixada • Lossless" : "Lossless FLAC • 320k");
+                badge.setTextColor(Ui.CYAN);
+                badge.setBackground(Ui.surface(context, Ui.withAlpha(Ui.CYAN, 0x22), 6, false));
+            }
+            playIcon.setImageDrawable(Glyph.drawable(
+                    state.playing || (state.loading && state.playing) ? Glyph.PAUSE : Glyph.PLAY, Ui.BG, true));
             likeIcon.setImageDrawable(Glyph.drawable(Glyph.HEART, state.liked ? Ui.CYAN : Ui.TEXT3, false));
             likeIcon.setSelected(state.liked);
+            likeIcon.setContentDescription(state.liked ? "Música curtida" : "Curtir música");
             shuffleIcon.setImageDrawable(Glyph.drawable(Glyph.SHUFFLE, state.shuffled ? Ui.CYAN : Ui.TEXT3));
+            shuffleIcon.setSelected(state.shuffled);
+            shuffleIcon.setContentDescription(state.shuffled ? "Modo aleatório ativado" : "Modo aleatório desativado");
             if (state.repeat == 2) {
                 repeatIcon.setImageDrawable(Glyph.drawable(Glyph.REPEAT_ONE, Ui.CYAN));
+                repeatIcon.setSelected(true);
+                repeatIcon.setContentDescription("Repetindo a faixa atual");
             } else if (state.repeat == 1) {
                 repeatIcon.setImageDrawable(Glyph.drawable(Glyph.REPEAT, Ui.CYAN));
+                repeatIcon.setSelected(true);
+                repeatIcon.setContentDescription("Repetindo toda a lista");
             } else {
                 repeatIcon.setImageDrawable(Glyph.drawable(Glyph.REPEAT, Ui.TEXT3));
+                repeatIcon.setSelected(false);
+                repeatIcon.setContentDescription("Repetição desativada");
             }
             seek.setMax(Math.max(1, state.durationMs));
             if (!dragging) seek.setProgress(state.positionMs);
