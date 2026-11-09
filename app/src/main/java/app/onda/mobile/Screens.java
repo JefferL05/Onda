@@ -1958,6 +1958,19 @@ final class Screens {
             center.setGravity(Gravity.CENTER);
             center.addView(Ui.eyebrow(context, "Tocando agora"));
             top.addView(center, new LinearLayout.LayoutParams(0, -2, 1));
+            ImageView cast = Widgets.iconButton(context, Glyph.CAST, Ui.TEXT2, 20);
+            cast.setContentDescription("Transmitir áudio");
+            cast.setOnClickListener(v -> Widgets.toast(context, "Saída de áudio: Dispositivo Onda"));
+            top.addView(cast, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
+            ImageView share = Widgets.iconButton(context, Glyph.SHARE, Ui.TEXT2, 20);
+            share.setContentDescription("Compartilhar música");
+            share.setOnClickListener(v -> {
+                PlayerController.State state = player.state();
+                if (state.url != null && !state.url.isEmpty()) {
+                    Widgets.share(context, state.title, state.url);
+                }
+            });
+            top.addView(share, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
             ImageView more = Widgets.iconButton(context, Glyph.MORE, Ui.TEXT2, 22);
             more.setContentDescription("Opções da faixa");
             more.setOnClickListener(v -> {
@@ -2069,7 +2082,7 @@ final class Screens {
             quick.setPadding(0, Ui.dp(context, 10), 0, 0);
             quick.setGravity(Gravity.CENTER);
 
-            likeIcon = Widgets.iconButton(context, Glyph.HEART, Ui.TEXT3, 20);
+            likeIcon = Widgets.iconButton(context, Glyph.HEART_BORDER, Ui.TEXT3, 20);
             likeIcon.setContentDescription("Curtir");
             likeIcon.setOnClickListener(v -> {
                 LibraryStore.Track track = library.find(player.state().url);
@@ -2077,6 +2090,17 @@ final class Screens {
                 library.toggleLike(track);
                 Widgets.toast(context, library.liked(track.url) ? "Música curtida" : "Removida dos favoritos");
                 refresh();
+            });
+
+            ImageView downloadIcon = Widgets.iconButton(context, Glyph.DOWNLOAD, Ui.TEXT3, 20);
+            downloadIcon.setContentDescription("Baixar música");
+            downloadIcon.setOnClickListener(v -> {
+                PlayerController.State state = player.state();
+                LibraryStore.Track track = library.find(state.url);
+                if (track != null) {
+                    player.download(track);
+                    Widgets.toast(context, "Download iniciado");
+                }
             });
 
             ImageView eqIcon = Widgets.iconButton(context, Glyph.EQUALIZER, Ui.CYAN, 20);
@@ -2109,6 +2133,7 @@ final class Screens {
             });
 
             quick.addView(likeIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
+            quick.addView(downloadIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
             quick.addView(eqIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
             quick.addView(timerIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
             quick.addView(lyrics, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
@@ -2162,7 +2187,7 @@ final class Screens {
             }
             playIcon.setImageDrawable(Glyph.drawable(
                     state.playing || (state.loading && state.playing) ? Glyph.PAUSE : Glyph.PLAY, Ui.BG, true));
-            likeIcon.setImageDrawable(Glyph.drawable(Glyph.HEART, state.liked ? Ui.CYAN : Ui.TEXT3, false));
+            likeIcon.setImageDrawable(Glyph.drawable(state.liked ? Glyph.HEART : Glyph.HEART_BORDER, state.liked ? Ui.CYAN : Ui.TEXT3));
             likeIcon.setSelected(state.liked);
             likeIcon.setContentDescription(state.liked ? "Música curtida" : "Curtir música");
             shuffleIcon.setImageDrawable(Glyph.drawable(Glyph.SHUFFLE, state.shuffled ? Ui.CYAN : Ui.TEXT3));

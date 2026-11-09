@@ -123,7 +123,7 @@ public final class MainActivity extends Activity implements PlayerController.Lis
         root.addView(navBar, new LinearLayout.LayoutParams(-1, -2));
 
         addTab(Glyph.HOME, "Início");
-        addTab(Glyph.SPARK, "Explorar");
+        addTab(Glyph.EXPLORE, "Explorar");
         addTab(Glyph.SEARCH, "Buscar");
         addTab(Glyph.LIBRARY, "Biblioteca");
 
@@ -268,8 +268,8 @@ public final class MainActivity extends Activity implements PlayerController.Lis
         for (int i = 0; i < navTabs.size(); i++) {
             boolean selected = i == tab && !browserVisible && inTab;
             navGlyphs.get(i).setImageDrawable(Glyph.drawable(
-                    i == 0 ? Glyph.HOME : i == 1 ? Glyph.SPARK : i == 2 ? Glyph.SEARCH : Glyph.LIBRARY,
-                    selected ? colorActive : colorIdle, false));
+                    i == 0 ? Glyph.HOME : i == 1 ? Glyph.EXPLORE : i == 2 ? Glyph.SEARCH : Glyph.LIBRARY,
+                    selected ? colorActive : colorIdle));
             navLabels.get(i).setTextColor(selected ? colorActive : colorIdle);
             navLabels.get(i).setTypeface(Typeface.create("sans-serif-medium", selected ? Typeface.BOLD : Typeface.NORMAL));
             View parent = navTabs.get(i);

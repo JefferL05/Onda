@@ -50,7 +50,7 @@ final class MiniPlayer {
         subtitle.setPadding(0, Ui.dp(context, 2), 0, 0);
         words.addView(subtitle);
         bar.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
-        likeIcon = Widgets.iconButton(context, Glyph.HEART, Ui.TEXT3, 18);
+        likeIcon = Widgets.iconButton(context, Glyph.HEART_BORDER, Ui.TEXT3, 18);
         likeIcon.setContentDescription("Curtir");
         likeIcon.setOnClickListener(Widgets.debounced(v -> {
             LibraryStore.Track track = LibraryStore.shared(context).find(player.state().url);
@@ -116,7 +116,7 @@ final class MiniPlayer {
         CoverCache.with(host).load(cover, state.cover);
         playIcon.setImageDrawable(Glyph.drawable(
                 state.playing || (state.loading && state.playing) ? Glyph.PAUSE : Glyph.PLAY, Ui.BG, true));
-        likeIcon.setImageDrawable(Glyph.drawable(Glyph.HEART, state.liked ? Ui.CYAN : Ui.TEXT3));
+        likeIcon.setImageDrawable(Glyph.drawable(state.liked ? Glyph.HEART : Glyph.HEART_BORDER, state.liked ? Ui.CYAN : Ui.TEXT3));
         likeIcon.setContentDescription(state.liked ? "Música curtida" : "Curtir");
         updatePosition();
     }

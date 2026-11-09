@@ -101,14 +101,15 @@ final class Widgets {
         words.addView(subtitle);
         row.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
 
-        ImageView likeBtn = iconButton(context, Glyph.HEART, LibraryStore.shared(context).liked(track.url) ? Ui.CYAN : Ui.TEXT3, 20);
-        likeBtn.setContentDescription(LibraryStore.shared(context).liked(track.url) ? "Descurtir " + track.title : "Curtir " + track.title);
+        boolean isInitialLiked = LibraryStore.shared(context).liked(track.url);
+        ImageView likeBtn = iconButton(context, isInitialLiked ? Glyph.HEART : Glyph.HEART_BORDER, isInitialLiked ? Ui.CYAN : Ui.TEXT3, 20);
+        likeBtn.setContentDescription(isInitialLiked ? "Descurtir " + track.title : "Curtir " + track.title);
         likeBtn.setFocusable(false);
         likeBtn.setClickable(true);
         likeBtn.setOnClickListener(v -> {
             LibraryStore.shared(context).toggleLike(track);
             boolean isLiked = LibraryStore.shared(context).liked(track.url);
-            likeBtn.setImageDrawable(Glyph.drawable(Glyph.HEART, isLiked ? Ui.CYAN : Ui.TEXT3));
+            likeBtn.setImageDrawable(Glyph.drawable(isLiked ? Glyph.HEART : Glyph.HEART_BORDER, isLiked ? Ui.CYAN : Ui.TEXT3));
             likeBtn.setContentDescription(isLiked ? "Descurtir " + track.title : "Curtir " + track.title);
             toast(context, isLiked ? "Música curtida" : "Removida dos favoritos");
         });
@@ -306,6 +307,8 @@ final class Widgets {
             PlayerController.get(context).download(track);
             toast(context, "Download na fila");
         });
+        labels.add("Compartilhar");
+        actions.add(() -> share(context, track.title, track.url));
         labels.add("Abrir no YouTube");
         actions.add(() -> external(context, track.url));
         if (!track.artist().isEmpty()) {
@@ -383,6 +386,17 @@ final class Widgets {
         } catch (Exception e) {
             toast(context, "Nenhum app disponível para abrir o link.");
         }
+    }
+
+    static void share(Context context, String title, String url) {
+        if (context == null || url == null) return;
+        try {
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_SEND);
+            intent.setType("text/plain");
+            intent.putExtra(android.content.Intent.EXTRA_SUBJECT, title);
+            intent.putExtra(android.content.Intent.EXTRA_TEXT, (title != null && !title.isEmpty() ? title + "\n" : "") + url);
+            context.startActivity(android.content.Intent.createChooser(intent, "Compartilhar"));
+        } catch (Exception ignored) { }
     }
 
     static void toast(Context context, String message) {

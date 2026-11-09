@@ -83,12 +83,13 @@ public class PathDataTest {
     @Test
     public void everyIconInTheAppParses() {
         String[] icons = {
-                Glyph.HOME, Glyph.SEARCH, Glyph.LIBRARY, Glyph.BACK, Glyph.CLOSE, Glyph.MORE,
+                Glyph.HOME, Glyph.EXPLORE, Glyph.SEARCH, Glyph.LIBRARY, Glyph.BACK, Glyph.CLOSE, Glyph.MORE,
                 Glyph.PLAY, Glyph.PAUSE, Glyph.NEXT, Glyph.PREV, Glyph.SHUFFLE, Glyph.REPEAT,
-                Glyph.REPEAT_ONE, Glyph.HEART, Glyph.PLUS, Glyph.DOWNLOAD, Glyph.RADIO,
-                Glyph.QUEUE, Glyph.LYRICS, Glyph.SPARK, Glyph.VOLUME, Glyph.DOWN, Glyph.WIFI,
+                Glyph.REPEAT_ONE, Glyph.HEART, Glyph.HEART_BORDER, Glyph.PLUS, Glyph.DOWNLOAD, Glyph.DOWNLOAD_DONE,
+                Glyph.RADIO, Glyph.QUEUE, Glyph.LYRICS, Glyph.SPARK, Glyph.VOLUME, Glyph.DOWN, Glyph.WIFI,
                 Glyph.SETTINGS, Glyph.EQUALIZER, Glyph.BOLT, Glyph.PERSON, Glyph.SHIELD,
-                Glyph.WAVE, Glyph.CHECK, Glyph.LOCK, Glyph.MIC, Glyph.TIMER
+                Glyph.WAVE, Glyph.CHECK, Glyph.LOCK, Glyph.MIC, Glyph.TIMER,
+                Glyph.CAST, Glyph.SHARE, Glyph.THUMB_DOWN
         };
         for (String icon : icons) {
             Recorder r = parse(icon);
