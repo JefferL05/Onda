@@ -76,7 +76,7 @@ final class Screens {
                 ImageView glyph = Widgets.iconButton(context, Glyph.BACK, Ui.TEXT2, 22);
                 glyph.setContentDescription("Voltar");
                 glyph.setOnClickListener(v -> host.onBackPressed());
-                backRow.addView(glyph, new LinearLayout.LayoutParams(Ui.dp(context, 44), Ui.dp(context, 44)));
+                backRow.addView(glyph, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
                 box.addView(backRow);
             }
             LinearLayout titleLine = Ui.row(context);
@@ -90,6 +90,8 @@ final class Screens {
                 link.setTextColor(Ui.CYAN);
                 link.setTextSize(13);
                 link.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+                link.setMinHeight(Ui.dp(context, Ui.TOUCH));
+                Ui.ripple(link, 12);
                 link.setPadding(Ui.dp(context, 10), Ui.dp(context, 12), 0, Ui.dp(context, 12));
                 link.setOnClickListener(v -> actionRun.run());
                 titleLine.addView(link);
@@ -1897,7 +1899,7 @@ final class Screens {
             down.setRotation(0f);
             down.setContentDescription("Fechar player");
             down.setOnClickListener(v -> host.onBackPressed());
-            top.addView(down, new LinearLayout.LayoutParams(Ui.dp(context, 44), Ui.dp(context, 44)));
+            top.addView(down, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
             LinearLayout center = Ui.column(context);
             center.setGravity(Gravity.CENTER);
             center.addView(Ui.eyebrow(context, "Tocando agora"));
@@ -1909,7 +1911,7 @@ final class Screens {
                 LibraryStore.Track track = library.find(state.url);
                 if (track != null) Widgets.trackMenu(context, library, track, null, null, this::refresh);
             });
-            top.addView(more, new LinearLayout.LayoutParams(Ui.dp(context, 44), Ui.dp(context, 44)));
+            top.addView(more, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
             page.addView(top);
 
             cover = Ui.cover(context, 0, 24);
@@ -2052,11 +2054,11 @@ final class Screens {
                 refresh();
             });
 
-            quick.addView(likeIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
-            quick.addView(eqIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
-            quick.addView(timerIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
-            quick.addView(lyrics, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
-            quick.addView(queue, new LinearLayout.LayoutParams(0, Ui.dp(context, 44), 1));
+            quick.addView(likeIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
+            quick.addView(eqIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
+            quick.addView(timerIcon, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
+            quick.addView(lyrics, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
+            quick.addView(queue, new LinearLayout.LayoutParams(0, Ui.dp(context, 48), 1));
             page.addView(quick);
 
             LinearLayout tabs = Ui.row(context);
@@ -2070,6 +2072,8 @@ final class Screens {
                 label.setText(names[i]);
                 label.setTextSize(13);
                 label.setGravity(Gravity.CENTER);
+                label.setMinHeight(Ui.dp(context, Ui.TOUCH));
+                Ui.ripple(label, 12);
                 label.setPadding(0, Ui.dp(context, 10), 0, Ui.dp(context, 10));
                 label.setOnClickListener(v -> {
                     tab = index;
@@ -2644,7 +2648,7 @@ final class Screens {
                     }
                 });
                 presetButtons.add(chip);
-                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, Ui.dp(context, 36));
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, Ui.dp(context, 42));
                 p.rightMargin = Ui.dp(context, 8);
                 presetRail.addView(chip, p);
             }

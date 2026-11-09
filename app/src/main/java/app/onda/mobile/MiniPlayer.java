@@ -58,7 +58,7 @@ final class MiniPlayer {
             LibraryStore.shared(context).toggleLike(track);
             update();
         });
-        bar.addView(likeIcon, new LinearLayout.LayoutParams(Ui.dp(context, 40), Ui.dp(context, 44)));
+        bar.addView(likeIcon, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
         playIcon = Glyph.view(context, Glyph.PLAY, 22, Ui.BG);
         LinearLayout playButton = Ui.column(context);
         playButton.setGravity(Gravity.CENTER);
@@ -67,11 +67,11 @@ final class MiniPlayer {
         Ui.ripple(playButton, 999);
         playButton.setContentDescription("Ouvir ou pausar");
         playButton.setOnClickListener(v -> player.toggle());
-        bar.addView(playButton, new LinearLayout.LayoutParams(Ui.dp(context, 44), Ui.dp(context, 44)));
+        bar.addView(playButton, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
         nextIcon = Widgets.iconButton(context, Glyph.NEXT, Ui.TEXT2, 20);
         nextIcon.setContentDescription("Próxima música");
         nextIcon.setOnClickListener(v -> player.next());
-        bar.addView(nextIcon, new LinearLayout.LayoutParams(Ui.dp(context, 40), Ui.dp(context, 44)));
+        bar.addView(nextIcon, new LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)));
         bar.setOnClickListener(v -> expand.run());
         bar.setContentDescription("Abrir o player");
         Ui.ripple(bar, 18);

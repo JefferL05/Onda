@@ -135,9 +135,13 @@ public final class Ui {
     public static void ripple(View view, int radius) {
         Context context = view.getContext();
         Drawable content = view.getBackground();
-        view.setBackground(new RippleDrawable(ColorStateList.valueOf(withAlpha(CYAN, 0x30)),
-                content, surface(context, TEXT, radius, false)));
+        GradientDrawable mask = new GradientDrawable();
+        mask.setColor(Color.WHITE);
+        mask.setCornerRadius(dp(context, radius));
+        view.setBackground(new RippleDrawable(ColorStateList.valueOf(withAlpha(CYAN, 0x38)),
+                content, mask));
         view.setFocusable(true);
+        view.setSoundEffectsEnabled(true);
     }
 
     public static int blend(int base, int over, float amount) {

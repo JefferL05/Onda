@@ -2,6 +2,12 @@ param([switch]$Install, [switch]$LiveTests, [switch]$Push, [string]$CommitMessag
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
+# 1. Limpeza automatica de arquivos duplicados (*_2.*) na raiz
+Get-ChildItem -Path $PSScriptRoot -File | Where-Object { $_.Name -match '_2(\.|$)' } | ForEach-Object {
+    Write-Output "Removendo arquivo duplicado: $($_.Name)"
+    Remove-Item $_.FullName -Force
+}
+
 $tools = Join-Path $env:LOCALAPPDATA 'AndroidBuild'
 if (!(Test-Path "$env:JAVA_HOME\bin\javac.exe")) {
     $jdk = Get-ChildItem "$tools\jdk" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -73,9 +79,15 @@ try {
         Set-Location $origRoot
         $msg = if ($CommitMessage) { $CommitMessage } else { "Release $version - build e APK gerado" }
         git add .
-        git commit -m $msg
-        git push origin main
-        Write-Output "Alterações enviadas para o GitHub com sucesso: $msg"
+        $status = git status --porcelain
+        if ($status) {
+            git commit -m $msg
+            git push origin main
+            $commitHash = (git rev-parse --short HEAD)
+            Write-Output "Alterações enviadas para o GitHub com sucesso: $msg (Commit: $commitHash)"
+        } else {
+            Write-Output "Nenhuma alteração pendente para commit no Git."
+        }
     }
 }
 finally {

@@ -170,6 +170,7 @@ public final class MainActivity extends Activity implements PlayerController.Lis
         tabView.setGravity(Gravity.CENTER);
         tabView.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 6));
         tabView.setContentDescription(label);
+        Ui.ripple(tabView, 16);
         ImageView icon = Glyph.view(this, glyph, 22, Ui.TEXT3);
         tabView.addView(icon);
         TextView text = new TextView(this);

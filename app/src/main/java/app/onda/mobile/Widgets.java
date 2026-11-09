@@ -74,6 +74,7 @@ final class Widgets {
         row.addView(more, new LinearLayout.LayoutParams(Ui.dp(context, 40), Ui.dp(context, 48)));
 
         row.setContentDescription("Reproduzir " + track.title + (detail.isEmpty() ? "" : ", " + detail));
+        Ui.ripple(row, 16);
         row.setOnClickListener(v -> action.onPrimary(track, row));
         row.setOnLongClickListener(v -> {
             action.onLongPress(track, row);
@@ -107,6 +108,7 @@ final class Widgets {
         subtitle.setTextSize(11);
         words.addView(subtitle);
         row.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+        Ui.ripple(row, 12);
         row.setOnClickListener(v -> action.onPrimary(track, row));
         row.setOnLongClickListener(v -> {
             action.onLongPress(track, row);
@@ -200,9 +202,11 @@ final class Widgets {
     // ------------------------------------------------------------ actions
     static ImageView iconButton(Context context, String glyph, int color, int sizeDp) {
         ImageView view = Glyph.view(context, glyph, sizeDp, color);
-        view.setBackground(Ui.surface(context, Color.TRANSPARENT, 999, false));
-        Ui.roundClip(view, 999);
+        view.setMinimumWidth(Ui.dp(context, Ui.TOUCH));
+        view.setMinimumHeight(Ui.dp(context, Ui.TOUCH));
         view.setPadding(Ui.dp(context, 8), Ui.dp(context, 8), Ui.dp(context, 8), Ui.dp(context, 8));
+        Ui.roundClip(view, 999);
+        Ui.ripple(view, 999);
         view.setContentDescription(null);
         return view;
     }
